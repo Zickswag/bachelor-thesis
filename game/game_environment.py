@@ -1,29 +1,47 @@
 import pygame
 import math
+import numpy as np
 from math import hypot
 from game.track import get_walls
-from game.checkpoints import get_goals
+from game.checkpoints import get_checkpoints
 
-# ─── Fenster & Framerate ────────────────────────────────────────────────────────
+# Fenster & Framerate 
 WINDOW_SIZE         = (1200, 900)
 FPS                 = 120
 
-# ─── Belohnungen & Strafen ──────────────────────────────────────────────────────
-GOAL_REWARD         = 1
+# Belohnungen & Strafen
+CHECKPOINT_REWARD   = 1
 LIFE_REWARD         = 0
 CRASH_PENALTY       = -1
 
-# ─── Fahrzeugparameter ───────────────────────────────────────────────────────────
+#Fahrzeugparameter
 CAR_WIDTH           = 14
 CAR_HEIGHT          = 30
+THRESHOLD           = int(math.hypot(CAR_WIDTH, CAR_HEIGHT)/2)  # ≈16 px
 MAX_SPEED           = 15
 ACCELERATION_FACTOR = 1.05     
 TURN_ANGLE_RAD      = math.radians(15)
 
-# ─── Sensor (Ray-Casting) ────────────────────────────────────────────────────────
+# Sensor (Ray-Casting)
 SENSOR_RANGE        = 1000     
 
-
+def is_checkpoint_passed(px, py, x1, y1, x2, y2, thresh):
+    # Vektoren A→B und A→P
+    AB = np.array([x2 - x1, y2 - y1], dtype=np.float32)
+    AP = np.array([px - x1, py - y1], dtype=np.float32)
+    # Projektion von AP auf AB: t in ℝ
+    denom = np.dot(AB, AB)
+    if denom == 0:
+        return False  # Segment der Länge 0
+    t = np.dot(AP, AB) / denom
+    # nur innerhalb des Segments [A,B] interessiert
+    if t < 0.0 or t > 1.0:
+        return False
+    # nächster Punkt Q auf AB
+    Q = np.array([x1, y1], dtype=np.float32) + t * AB
+    # quadratischer Abstand P↔Q
+    dist2 = (px - Q[0])**2 + (py - Q[1])**2
+    return dist2 <= thresh * thresh
 
 def rotate_rect(cx, cy, width, height, angle):
     sa = math.sin(angle)
@@ -36,7 +54,6 @@ def rotate_rect(cx, cy, width, height, angle):
     p3 = (cx + dx2 - dx1, cy + dy2 - dy1)
     p4 = (cx - dx2 - dx1, cy - dy2 - dy1)
     return p1, p2, p3, p4
-
 
 class Point:
     def __init__(self, x, y):
@@ -90,7 +107,6 @@ class Car:
         self.target_angle = self.angle
         self.dvel = 1
         self.vel = 0
-        self.max_speed = MAX_SPEED 
 
         # Eckpunkte
         self.pt1 = Point(self.pt.x - self.width/2, self.pt.y - self.height/2)
@@ -99,7 +115,7 @@ class Car:
         self.pt4 = Point(self.pt.x - self.width/2, self.pt.y + self.height/2)
         self.p1 = self.pt1; self.p2 = self.pt2; self.p3 = self.pt3; self.p4 = self.pt4
 
-        # **PRECOMPUTE**: Die vier Linien-Seiten als Tupel (x3,y3,x4,y4)
+        # Die vier Linien-Seiten (precomputed) als Tupel (x3,y3,x4,y4)
         self.collision_lines = [
             (self.p1.x, self.p1.y, self.p2.x, self.p2.y),
             (self.p2.x, self.p2.y, self.p3.x, self.p3.y),
@@ -129,10 +145,10 @@ class Car:
     def accelerate(self,dvel):
         dvel = dvel * ACCELERATION_FACTOR
         self.vel = self.vel + dvel
-        if self.vel > self.max_speed:
-            self.vel = self.max_speed
-        if self.vel < -self.max_speed:
-            self.vel = -self.max_speed
+        if self.vel > MAX_SPEED:
+            self.vel = MAX_SPEED
+        if self.vel < -MAX_SPEED:
+            self.vel = -MAX_SPEED
         
     def turn(self, dir):
         self.target_angle = self.target_angle + dir * TURN_ANGLE_RAD
@@ -158,7 +174,7 @@ class Car:
             self.width, self.height,
             self.target_angle
         )
-        # coords sind jetzt 4 Tupel: ((x1,y1), …, (x4,y4))
+        # Koordinaten als 4 Tupel: ((x1,y1), …, (x4,y4))
         self.p1 = Point(*coords[0])
         self.p2 = Point(*coords[1])
         self.p3 = Point(*coords[2])
@@ -228,7 +244,7 @@ class Car:
                         record, closest = d, pt
 
             if closest: 
-                #append distance for current ray 
+                # append distance for current ray 
                 self.closestRays.append(closest)
                 observations.append(record)
                
@@ -236,10 +252,10 @@ class Car:
                 observations.append(SENSOR_RANGE)
 
         for i in range(len(observations)):
-            #invert observation values 0 is far away 1 is close
+            # invert observation values 0 is far away 1 is close
             observations[i] = ((SENSOR_RANGE - observations[i]) / SENSOR_RANGE)
 
-        observations.append(self.vel / self.max_speed)
+        observations.append(self.vel / MAX_SPEED)
         return observations
 
     def collision(self, wall):
@@ -255,29 +271,11 @@ class Car:
                 return True
         return False
     
-    
-    def score(self, goal):
-        sa = math.sin(self.angle)
-        ca = math.cos(self.angle)
-        dx50 = sa * (-50)
-        dy50 = ca * (-50)
-        line1 = Line(Point(self.x, self.y), Point(self.x + dx50, self.y + dy50))
-        x1, y1, x2, y2 = goal.x1, goal.y1, goal.x2, goal.y2
-        x3, y3 = line1.pt1.x, line1.pt1.y
-        x4, y4 = line1.pt2.x, line1.pt2.y
-        den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
-        if den == 0: return False
-        t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den
-        u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den
-        if t > 0 and t < 1 and u < 1 and u > 0:
-            pt_x, pt_y = math.floor(x1 + t * (x2 - x1)), math.floor(y1 + t * (y2 - y1))
-            dx = self.x - pt_x
-            dy = self.y - pt_y
-            d = hypot(dx, dy)
-            if d < 20:
-                self.points += GOAL_REWARD
-                return(True)
-        return(False)
+    def score(self, checkpoint, thresh):
+        if is_checkpoint_passed(self.x, self.y,checkpoint.x1, checkpoint.y1,checkpoint.x2, checkpoint.y2, thresh):
+            self.points += CHECKPOINT_REWARD
+            return True
+        return False
 
     def reset(self):
         self.x = 50
@@ -319,7 +317,7 @@ class GameEnvironment:
     def reset(self):
         self.car = Car(600, 790)
         self.walls = get_walls()
-        self.goals = get_goals()
+        self.checkpoints = get_checkpoints()
         self.game_reward = 0
 
     def step(self, action):
@@ -328,34 +326,35 @@ class GameEnvironment:
         self.car.update()
         reward = LIFE_REWARD
 
-        # Check if car passes Goal and scores
-        index = 1
-        for goal in self.goals:
-            if index > len(self.goals):
-                index = 1
-            if goal.isactiv:
-                if self.car.score(goal):
-                    goal.isactiv = False
-                    self.goals[index-2].isactiv = True
-                    reward += GOAL_REWARD
-            index = index + 1
+        # 1) Check if car passes active Goal and scores
+        for checkpoint_index, checkpoint in enumerate(self.checkpoints):
+            if not checkpoint.isactiv:
+                continue
+
+            # benutze jetzt die neue score-Methode (Punkt-Segment-Abstand)
+            if self.car.score(checkpoint, THRESHOLD):
+                # deactivate current, activate next (zyklisch)
+                checkpoint.isactiv = False
+                prev_checkpoint_index = (checkpoint_index - 1) % len(self.checkpoints)
+                self.checkpoints[prev_checkpoint_index].isactiv = True
+
+                reward += CHECKPOINT_REWARD
+            break  # nur ein aktiver Checkpoint existiert zu jeder Zeit
 
         #check if car crashed in the wall
         for wall in self.walls:
             if self.car.collision(wall):
                 reward += CRASH_PENALTY
                 done = True
+                break
 
         state = None if done else self.car.cast(self.walls)
         return state, reward, done
 
-
-
-
     def render(self, action):
-        DRAW_WALLS = True
-        DRAW_GOALS = True
-        DRAW_RAYS = True
+        DRAW_WALLS = False
+        DRAW_CHECKPOINTS = False
+        DRAW_RAYS = False
         self.clock = pygame.time.Clock()
         self.screen.blit(self.back_image, self.back_rect)
 
@@ -363,11 +362,11 @@ class GameEnvironment:
             for wall in self.walls:
                 wall.draw(self.screen)
         
-        if DRAW_GOALS:
-            for goal in self.goals:
-                goal.draw(self.screen)
-                if goal.isactiv:
-                    goal.draw(self.screen)
+        if DRAW_CHECKPOINTS:
+            for checkpoint in self.checkpoints:
+                checkpoint.draw(self.screen)
+                if checkpoint.isactiv:
+                    checkpoint.draw(self.screen)
         
         self.car.draw(self.screen)
 
@@ -415,9 +414,6 @@ class GameEnvironment:
         # score
         text_surface = self.font.render(f'Punkte {self.car.points}', True, pygame.Color('red'))
         self.screen.blit(text_surface, dest=(0, 0))
-        # speed
-        #text_surface = self.font.render(f'Speed {self.car.vel*-1}', True, pygame.Color('green'))
-        #self.screen.blit(text_surface, dest=(800, 0))
 
         self.clock.tick(FPS)
         pygame.display.update()

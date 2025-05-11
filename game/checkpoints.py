@@ -9,7 +9,7 @@ class Checkpoint:
         if self.isactiv:
             pygame.draw.line(win, (255,0,0), (self.x1, self.y1), (self.x2, self.y2), 2)
 
-def get_goals():
+def get_checkpoints():
     checkpoints = []
     checkpoints.append(Checkpoint(500,700,500,880))
     checkpoints.append(Checkpoint(400,700,400,880))
