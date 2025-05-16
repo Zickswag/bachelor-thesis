@@ -19,11 +19,26 @@ CAR_WIDTH           = 14
 CAR_HEIGHT          = 30
 THRESHOLD           = int(math.hypot(CAR_WIDTH, CAR_HEIGHT)/2)  # ≈16 px
 MAX_SPEED           = 15
-ACCELERATION_FACTOR = 1.05     
+ACCELERATION_FACTOR = 1.05
+DRIFT_FACTOR        = 0.1  # (Je kleiner, desto mehr „rutscht“ das Auto.)    
 TURN_ANGLE_RAD      = math.radians(15)
 
 # Sensor (Ray-Casting)
-SENSOR_RANGE        = 1000     
+SENSOR_RANGE        = 1000
+
+# Render
+DRAW_WALLS          = True
+DRAW_CHECKPOINTS    = True
+DRAW_RAYS           = True
+
+# helper zum Normieren eines Winkelunterschieds auf [-π, +π]
+def _normalize_angle(delta):
+    """Winkeldifferenz in [-π, π] bringen."""
+    while delta > math.pi:
+        delta -= 2*math.pi
+    while delta < -math.pi:
+        delta += 2*math.pi
+    return delta
 
 def is_checkpoint_passed(px, py, x1, y1, x2, y2, thresh):
     # Vektoren A→B und A→P
@@ -105,8 +120,11 @@ class Car:
         self.rect = self.image.get_rect().move(self.x, self.y)
         self.angle = math.radians(90)
         self.target_angle = self.angle
+        self.travel_angle = self.angle        # echte Fahr­richtung (für Drift)
         self.dvel = 1
         self.vel = 0
+        self.velX = 0
+        self.velY = 0
 
         # Eckpunkte
         self.pt1 = Point(self.pt.x - self.width/2, self.pt.y - self.height/2)
@@ -154,37 +172,44 @@ class Car:
         self.target_angle = self.target_angle + dir * TURN_ANGLE_RAD
     
     def update(self):
-        # 1) Winkel und Geschwindigkeit
+        # 1) Sofortige Karosserie-Ausrichtung übernehmen
         self.angle = self.target_angle
-        sa = math.sin(self.angle)
-        ca = math.cos(self.angle)
+
+        # 2) Fahrtrichtung (travel_angle) schwenkt nur teilweise zur neuen Ausrichtung
+        delta = _normalize_angle(self.angle - self.travel_angle)
+        self.travel_angle += delta * DRIFT_FACTOR
+
+        # 3) Neue Geschwindigkeitskomponenten aus travel_angle berechnen
+        sa = math.sin(self.travel_angle)
+        ca = math.cos(self.travel_angle)
         self.velX = -sa * self.vel
-        self.velY = ca * self.vel
-        self.x += self.velX; self.y += self.velY
+        self.velY =  ca * self.vel
 
-        # 2) Eckpunkte verschieben
-        self.pt1 = Point(self.pt1.x + self.velX, self.pt1.y + self.velY)
-        self.pt2 = Point(self.pt2.x + self.velX, self.pt2.y + self.velY)
-        self.pt3 = Point(self.pt3.x + self.velX, self.pt3.y + self.velY)
-        self.pt4 = Point(self.pt4.x + self.velX, self.pt4.y + self.velY)
+        # 4) Position updaten
+        self.x += self.velX
+        self.y += self.velY
 
-        # 3) Rotieren
+        # 5) Eckpunkte verschieben (wie bisher)
+        for pt in (self.pt1, self.pt2, self.pt3, self.pt4):
+            pt.x += self.velX
+            pt.y += self.velY
+
+        # 6) Eckpunkte rotieren an der Karosserie-Ausrichtung
         coords = rotate_rect(
             self.x, self.y,
             self.width, self.height,
             self.target_angle
         )
-        # Koordinaten als 4 Tupel: ((x1,y1), …, (x4,y4))
         self.p1 = Point(*coords[0])
         self.p2 = Point(*coords[1])
         self.p3 = Point(*coords[2])
         self.p4 = Point(*coords[3])
 
-        # 4) Bild aktualisieren
+        # 7) Bild weiterhin nach Karosserie-Ausrichtung drehen
         self.image = pygame.transform.rotate(self.original_image, 90 - math.degrees(self.target_angle))
         self.rect = self.image.get_rect(center=(self.x, self.y))
-        
-        # 5) collision_lines erneuern
+
+        # 8) Collision-Linien updaten (wie bisher)
         self.collision_lines = [
             (self.p1.x, self.p1.y, self.p2.x, self.p2.y),
             (self.p2.x, self.p2.y, self.p3.x, self.p3.y),
@@ -352,9 +377,6 @@ class GameEnvironment:
         return state, reward, done
 
     def render(self, action):
-        DRAW_WALLS = False
-        DRAW_CHECKPOINTS = False
-        DRAW_RAYS = False
         self.clock = pygame.time.Clock()
         self.screen.blit(self.back_image, self.back_rect)
 

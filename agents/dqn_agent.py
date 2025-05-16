@@ -2,6 +2,10 @@ import numpy as np
 import tensorflow as tf
 
 class ReplayBuffer(object):
+    """
+    ReplayBuffer speichert Erfahrungen (state, action, reward, next_state, done)
+    und liefert zufällige Samples für das Training (Experience Replay).
+    """
     def __init__(self, max_size, input_shape, n_actions, discrete=False):
         self.mem_size = max_size
         self.mem_cntr = 0
@@ -14,6 +18,10 @@ class ReplayBuffer(object):
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.float32)
 
     def store_transition(self, state, action, reward, state_, done):
+        """
+        Speichert einen Übergang in den Puffer.
+        Ältere Übergänge werden im ring buffer Modus überschrieben.
+        """
         index = self.mem_cntr % self.mem_size
         self.state_memory[index] = state
         self.new_state_memory[index] = state_
@@ -29,9 +37,12 @@ class ReplayBuffer(object):
         self.mem_cntr += 1
 
     def sample_buffer(self, batch_size):
+        """
+        Zieht eine Zufallsstichprobe aus dem Replay Buffer.
+        Liefert Tupel (states, actions, rewards, next_states, dones).
+        """
         max_mem = min(self.mem_cntr, self.mem_size)
         batch = np.random.choice(max_mem, batch_size)
-
         states = self.state_memory[batch]
         actions = self.action_memory[batch]
         rewards = self.reward_memory[batch]
@@ -41,11 +52,13 @@ class ReplayBuffer(object):
 
 
 class DQNAgent(object):
-    def __init__(self, alpha, gamma, n_actions, epsilon, batch_size,
-                 input_dims, epsilon_dec, epsilon_end,
-                 mem_size, replace_target, fname):
-        self.action_space = [i for i in range(n_actions)]
-        self.n_actions = n_actions
+    """
+    Deep Q-Network Agent mit Target-Network, Epsilon-Greedy Exploration
+    und Experience Replay.
+    """
+    def __init__(self, alpha, gamma, actions, epsilon, batch_size, input_dims, epsilon_dec, epsilon_end, mem_size, replace_target, layers, fname):
+        self.action_space = [i for i in range(actions)]
+        self.n_actions = actions
         self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_dec = epsilon_dec
@@ -53,15 +66,23 @@ class DQNAgent(object):
         self.batch_size = batch_size
         self.model_file = fname
         self.replace_target = replace_target
-        self.memory = ReplayBuffer(mem_size, input_dims, n_actions, discrete=True)
-       
-        self.eval_network = QNetwork(input_dims, n_actions, batch_size, lr=alpha)
-        self.target_network = QNetwork(input_dims, n_actions, batch_size, lr=alpha)
+        self.memory = ReplayBuffer(mem_size, input_dims, actions, discrete=True)
+        self.layers = layers
+
+        # Eval- und Zielnetzwerk (Target Network)        
+        self.eval_network = QNetwork(input_dims, actions, batch_size, alpha, layers)
+        self.target_network = QNetwork(input_dims, actions, batch_size, alpha, layers)
 
     def remember(self, state, action, reward, new_state, done):
+        """Speichere die Erfahrung im Replay Buffer"""
         self.memory.store_transition(state, action, reward, new_state, done)
 
     def choose_action(self, state):
+        """
+        Wähle Aktion per Epsilon-Greedy:
+         - Zufall mit Wahrscheinlichkeit ε
+         - sonst: argmax_a Q_eval(state, a)
+        """
         state_tensor = tf.convert_to_tensor([state], dtype=tf.float32)
         if np.random.random() < self.epsilon:
             return np.random.choice(self.action_space)
@@ -70,6 +91,10 @@ class DQNAgent(object):
         return action
 
     def learn(self):
+        """
+        Ziehe Batch aus Replay Buffer, berechne Ziel-Q-Werte,
+        und führe einen Trainingsschritt auf dem Eval-Netzwerk aus.
+        """
         if self.memory.mem_cntr < self.batch_size:
             return
 
@@ -105,12 +130,16 @@ class DQNAgent(object):
         
 
     def update_network_parameters(self):
+        """Kopiere Gewichte vom Eval- ins Target-Netzwerk"""
         self.target_network.copy_weights(self.eval_network)
 
-    def save_model(self):
-        self.eval_network.model.save(self.model_file)
+    def save_model(self, episode: int):
+        """Speichere das Eval-Modell auf Festplatte"""
+        path = self.model_file.format(episode=episode)
+        self.eval_network.model.save(path)
         
     def load_model(self):
+        """Lade Modell und gleiche Target-Netzwerk an"""
         self.eval_network.model = tf.keras.models.load_model(self.model_file)
         self.target_network.model = tf.keras.models.load_model(self.model_file)
         if self.epsilon == 0.0:
@@ -118,23 +147,28 @@ class DQNAgent(object):
 
 
 class QNetwork:
-    def __init__(self, NbrStates, NbrActions, batch_size, lr):
+    """
+    Keras-basiertes Feedforward-Netzwerk für Q-Funktionsapproximation.
+    """
+    def __init__(self, NbrStates, NbrActions, batch_size, lr, layers):
         self.NbrStates = NbrStates
         self.NbrActions = NbrActions
         self.batch_size = batch_size
-        self.model     = self.createModel()
+        self.layers = layers
+        self.model = self.create_model()
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
-        self.loss_fn   = tf.keras.losses.MeanSquaredError()
+        self.loss_fn = tf.keras.losses.MeanSquaredError()
     
-    def createModel(self):
-        model = tf.keras.Sequential([
-            tf.keras.layers.Dense(128, activation=tf.nn.relu),
-            tf.keras.layers.Dense(128, activation=tf.nn.relu),
-            tf.keras.layers.Dense(self.NbrActions)
-        ])
-        return model
+    def create_model(self):
+        """Erzeuge Sequential-Modell mit gegebener Layer-Architektur"""
+        model_layers = []
+        for units in self.layers:
+            model_layers.append(tf.keras.layers.Dense(units, activation=tf.nn.relu))
+        model_layers.append(tf.keras.layers.Dense(self.NbrActions))
+        return tf.keras.Sequential(model_layers)
     
     def copy_weights(self, TrainNet):
+        """Kopiere trainierbare Variablen von einer Quelle"""
         variables1 = self.model.trainable_variables
         variables2 = TrainNet.model.trainable_variables
         for v1, v2 in zip(variables1, variables2):
@@ -142,6 +176,7 @@ class QNetwork:
             
     @tf.function
     def train_step(self, states, q_targets):
+        """Einzelner Gradientenschritt auf Basis MeanSquaredError"""
         with tf.GradientTape() as tape:
             q_pred = self.model(states, training=True)
             loss   = self.loss_fn(q_targets, q_pred)
@@ -154,6 +189,7 @@ class QNetwork:
     # Graph-Eval-Funktion
     @tf.function
     def q_eval(self, states):
+        """Q-Werte-Prediction (Inference-Modus)"""
         return self.model(states, training=False)
     
         
