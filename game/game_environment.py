@@ -27,9 +27,9 @@ TURN_ANGLE_RAD      = math.radians(15)
 SENSOR_RANGE        = 1000
 
 # Render
-DRAW_WALLS          = True
-DRAW_CHECKPOINTS    = True
-DRAW_RAYS           = True
+DRAW_WALLS          = False
+DRAW_CHECKPOINTS    = False
+DRAW_RAYS           = False
 
 # helper zum Normieren eines Winkelunterschieds auf [-π, +π]
 def _normalize_angle(delta):
@@ -145,20 +145,12 @@ class Car:
     def action(self, choice):
         if choice == 1:
             self.accelerate(self.dvel)
-        elif choice == 8:
-            self.accelerate(self.dvel); self.turn(1)
-        elif choice == 7:
-            self.accelerate(self.dvel); self.turn(-1)
-        elif choice == 4:
-            self.accelerate(-self.dvel)
-        elif choice == 5:
-            self.accelerate(-self.dvel); self.turn(1)
-        elif choice == 6:
-            self.accelerate(-self.dvel); self.turn(-1)
-        elif choice == 3:
-            self.turn(1)
         elif choice == 2:
             self.turn(-1)
+        elif choice == 3:
+            self.turn(1)
+        elif choice == 4:
+            self.accelerate(-self.dvel)
     
     def accelerate(self,dvel):
         dvel = dvel * ACCELERATION_FACTOR

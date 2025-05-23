@@ -8,10 +8,10 @@ import subprocess
 import itertools
 
 # Parameterbereiche definieren
-learning_rate   = [0.0001, 0.0005, 0.001]
+learning_rate   = [0.0005]
 gamma           = [0.99]
-layer_set       = [[17], [17, 17], [17, 17, 17], [17, 17, 17, 17], [17, 17, 17, 17, 17]]
-agent           = ["dqn"]
+layer_set       = [[27, 27], [27, 27, 27], [27, 27, 27, 27], [27, 27, 27, 27, 27], [27, 27, 27, 27, 27, 27]]
+agent           = ["ddqn"]
 batch_size      = [512]
 mem_size        = [25000]
 replace_target  = [50]
@@ -20,7 +20,7 @@ epsilon_start   = [1.0]
 epsilon_end     = [0.1]
 epsilon_decay   = [0.9995]
 render_freq     = [0]
-max_steps       = [5000]
+max_steps       = [2000000]
 seed            = [0]
 
 # Erzeuge das kartesische Produkt aller Kombinationen

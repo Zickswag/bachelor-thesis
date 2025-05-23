@@ -18,24 +18,17 @@ def main():
         keys = pygame.key.get_pressed()
 
         # 3) Mapping auf die 0–8-Aktionen
-        if keys[K_DOWN] and keys[K_LEFT]:
-            action = 7  
-        elif keys[K_DOWN] and keys[K_RIGHT]:
-            action = 8   
-        elif keys[K_DOWN]:
+        if keys[K_DOWN]:
             action = 1  
-        elif keys[K_UP] and keys[K_LEFT]:
-            action = 5   
-        elif keys[K_UP] and keys[K_RIGHT]:
-            action = 6   
-        elif keys[K_UP]:
-            action = 4   
         elif keys[K_LEFT]:
             action = 2   
         elif keys[K_RIGHT]:
             action = 3   
+        elif keys[K_UP]:
+            action = 4   
         else:
             action = 0   
+           
 
         # 4) Einen Schritt im Env ausführen
         state, reward, done = env.step(action)

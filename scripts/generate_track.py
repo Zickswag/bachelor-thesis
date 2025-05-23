@@ -56,6 +56,10 @@ import pygame
 class Wall:
     def __init__(self, x1, y1, x2, y2):
         self.x1, self.y1, self.x2, self.y2 = x1, y1, x2, y2
+        self.xmin = min(x1, x2)
+        self.xmax = max(x1, x2)
+        self.ymin = min(y1, y2)
+        self.ymax = max(y1, y2)
     def draw(self, win):
         pygame.draw.line(win, (255,255,255), (self.x1, self.y1), (self.x2, self.y2), 5)
 

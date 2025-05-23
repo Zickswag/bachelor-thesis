@@ -51,7 +51,7 @@ class ReplayBuffer(object):
         return states, actions, rewards, states_, terminal
 
 
-class DQNAgent(object):
+class DDQNAgent(object):
     """
     Deep Q-Network Agent mit Target-Network, Epsilon-Greedy Exploration
     und Experience Replay.
@@ -74,7 +74,6 @@ class DQNAgent(object):
         self.target_network = QNetwork(input_dims, actions, batch_size, alpha, layers)
         self.target_network.copy_weights(self.eval_network)
 
-        
     def remember(self, state, action, reward, new_state, done):
         """Speichere die Erfahrung im Replay Buffer"""
         self.memory.store_transition(state, action, reward, new_state, done)
@@ -108,9 +107,10 @@ class DQNAgent(object):
         states_tensor  = tf.convert_to_tensor(states, dtype=tf.float32)
         next_tensor    = tf.convert_to_tensor(states_, dtype=tf.float32)
 
-        # Graph-Eval beider Netze
-        q_next = self.target_network.q_eval(next_tensor)
-        q_pred = self.eval_network.q_eval(states_tensor)
+         # Q-Werte aus beiden Netzwerken
+        q_next_target = self.target_network.q_eval(next_tensor)
+        q_next_eval   = self.eval_network.q_eval(next_tensor)
+        q_pred        = self.eval_network.q_eval(states_tensor)
 
         # Ziel-Q-Werte in NumPy berechnen
         q_target = q_pred.numpy()
@@ -118,10 +118,10 @@ class DQNAgent(object):
         # Aktion-Indices berechnen
         action_values = np.array(self.action_space, dtype=np.int32)
         action_idx = np.dot(actions, action_values)
-        # Q-Ziel setzen
-        q_target[batch_idx, action_idx] = (
-            rewards + self.gamma * np.max(q_next.numpy(), axis=1) * dones
-        )
+        # Double DQN: argmax über eval, Wert aus target
+        max_actions = tf.argmax(q_next_eval, axis=1)
+        selected_q_next = q_next_target.numpy()[batch_idx, max_actions.numpy()]
+        q_target[batch_idx, action_idx] = rewards + self.gamma * selected_q_next * dones
 
         # Graph-Trainings-Schritt via tf.function
         self.eval_network.train_step(states_tensor, tf.convert_to_tensor(q_target, dtype=tf.float32))
@@ -169,10 +169,10 @@ class QNetwork:
         model_layers.append(tf.keras.layers.Dense(self.NbrActions))
         return tf.keras.Sequential(model_layers)
     
-    def copy_weights(self, source_net):
+    def copy_weights(self, TrainNet):
         """Kopiere trainierbare Variablen von einer Quelle"""
         variables1 = self.model.trainable_variables
-        variables2 = source_net.model.trainable_variables
+        variables2 = TrainNet.model.trainable_variables
         for v1, v2 in zip(variables1, variables2):
             v1.assign(v2.numpy())
             

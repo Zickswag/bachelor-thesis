@@ -29,7 +29,7 @@ import numpy as np
 import tensorflow as tf   # TensorFlow
 
 from agents.dqn_agent import DQNAgent
-# from agents.ddqn_agent import DDQNAgent
+from agents.ddqn_agent import DDQNAgent
 from game import game_environment
 
 # Seed setzen
@@ -107,8 +107,8 @@ def main():
     # Agent instanziieren
     if args.agent == "dqn":
         AgentClass = DQNAgent
-    # else:
-    #   AgentClass = DDQNAgent
+    else:
+        AgentClass = DDQNAgent
 
     agent = AgentClass(
         actions=ACTIONS,
