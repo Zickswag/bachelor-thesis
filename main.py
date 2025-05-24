@@ -26,7 +26,7 @@ import datetime, shutil, json, csv
 import pygame
 import random
 import numpy as np
-import tensorflow as tf   # TensorFlow
+import tensorflow as tf 
 
 from agents.dqn_agent import DQNAgent
 from agents.ddqn_agent import DDQNAgent
@@ -38,9 +38,9 @@ np.random.seed(seed)
 tf.random.set_seed(seed) 
 
 # Strikten TF-Determinismus aktivieren (TF ≥2.8)
-tf.config.experimental.enable_op_determinism()
-tf.config.threading.set_inter_op_parallelism_threads(1)
-tf.config.threading.set_intra_op_parallelism_threads(1)
+#tf.config.experimental.enable_op_determinism()
+tf.config.threading.set_inter_op_parallelism_threads(14)
+tf.config.threading.set_intra_op_parallelism_threads(14)
 
 # Konstanten
 ACTIONS                 = 5
@@ -123,7 +123,7 @@ def main():
         batch_size=args.batch_size,
         layers=args.layers,
         fname=model_template
-)
+    )
 
     scores = []
     eps_history = []
@@ -138,7 +138,7 @@ def main():
         score = 0
         checkpoint_steps = 0
         episode_steps = 0
-        obs = np.array(game.step(0)[0])
+        state = np.array(game.step(0)[0])
         render_game = (args.render_freq > 0) and (episode % args.render_freq == 0)
 
         while not done and global_steps < args.max_steps:
@@ -147,9 +147,27 @@ def main():
                     pygame.quit()
                     return
 
-            action = agent.choose_action(obs)
-            obs_, reward, done = game.step(action)
-            obs_ = np.array(obs_)
+            # Agent wählt Aktion basierend auf aktuellem Zustand
+            action = agent.choose_action(state)
+            next_state, reward, done = game.step(action)
+
+            # obs_ kann None sein, wenn das Spiel vorbei ist
+            if next_state is None:
+                if done:
+                    next_state = np.zeros(INPUT_DIMS, dtype=np.float32)  # Platzhalter-Array
+                    obs_valid = True
+                else:
+                    # Unerwarteter None-Wert → ungültig
+                    obs_valid = False
+            else:
+                next_state = np.array(next_state, dtype=np.float32)
+                # Datentyp überprüpfung und Formvalidierung
+                obs_valid = (
+                    isinstance(state, np.ndarray) and isinstance(next_state, np.ndarray)
+                    and state.dtype == np.float32 and next_state.dtype == np.float32
+                    and state.shape == (INPUT_DIMS,) and next_state.shape == (INPUT_DIMS,)
+                    and not np.isnan(state).any() and not np.isnan(next_state).any()
+                )
 
             # Timeout, wenn kein Reward
             if reward == 0:
@@ -160,9 +178,14 @@ def main():
                 checkpoint_steps = 0
 
             score += reward
-            agent.remember(obs, action, reward, obs_, int(done))
-            agent.learn()
-            obs = obs_
+
+            # Nur wenn obs_valid True ist, speichern und lernen
+            if obs_valid:
+                # fülle Replay-Buffer mit gültiger Transition
+                agent.remember(state, action, reward, next_state, int(done))
+                agent.learn()
+                # Aktualisiere aktuellen Zustand
+                state = next_state
 
             episode_steps += 1
             global_steps += 1

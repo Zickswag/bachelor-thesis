@@ -115,19 +115,21 @@ class DDQNAgent(object):
         # Ziel-Q-Werte in NumPy berechnen
         q_target = q_pred.numpy()
         batch_idx = np.arange(self.batch_size, dtype=np.int32)
-        # Aktion-Indices berechnen
         action_values = np.array(self.action_space, dtype=np.int32)
         action_idx = np.dot(actions, action_values)
         # Double DQN: argmax über eval, Wert aus target
         max_actions = tf.argmax(q_next_eval, axis=1)
         selected_q_next = q_next_target.numpy()[batch_idx, max_actions.numpy()]
-        q_target[batch_idx, action_idx] = rewards + self.gamma * selected_q_next * dones
+
+        q_target[batch_idx, action_idx] = (rewards + self.gamma * selected_q_next * dones)
+
+        # Clipping zur Sicherheit
+        q_target = np.clip(q_target, -1e3, 1e3)
 
         # Graph-Trainings-Schritt via tf.function
         self.eval_network.train_step(states_tensor, tf.convert_to_tensor(q_target, dtype=tf.float32))
 
         # Epsilon-Decay
-        # self.epsilon = max(self.epsilon * self.epsilon_dec, self.epsilon_min)
         self.epsilon = self.epsilon * self.epsilon_dec if self.epsilon > self.epsilon_min else self.epsilon_min
         
 

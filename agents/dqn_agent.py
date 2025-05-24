@@ -33,7 +33,8 @@ class ReplayBuffer(object):
         else:
             self.action_memory[index] = action
         self.reward_memory[index] = reward
-        self.terminal_memory[index] = 1 - done
+        #self.terminal_memory[index] = 1 - done
+        self.terminal_memory[index] = 0.0 if done else 1.0
         self.mem_cntr += 1
 
     def sample_buffer(self, batch_size):
@@ -91,7 +92,7 @@ class DQNAgent(object):
         q_values = self.eval_network.q_eval(state_tensor)
         action = int(tf.argmax(q_values[0]))
         return action
-
+    
     def learn(self):
         """
         Ziehe Batch aus Replay Buffer, berechne Ziel-Q-Werte,
@@ -115,21 +116,20 @@ class DQNAgent(object):
         # Ziel-Q-Werte in NumPy berechnen
         q_target = q_pred.numpy()
         batch_idx = np.arange(self.batch_size, dtype=np.int32)
-        # Aktion-Indices berechnen
         action_values = np.array(self.action_space, dtype=np.int32)
         action_idx = np.dot(actions, action_values)
-        # Q-Ziel setzen
-        q_target[batch_idx, action_idx] = (
-            rewards + self.gamma * np.max(q_next.numpy(), axis=1) * dones
-        )
 
-        # Graph-Trainings-Schritt via tf.function
+        q_target[batch_idx, action_idx] = (rewards + self.gamma * np.max(q_next.numpy(), axis=1) * dones)
+
+        # Clipping zur Sicherheit
+        q_target = np.clip(q_target, -1e3, 1e3)
+
+        # Training + NaN-Prüfung
         self.eval_network.train_step(states_tensor, tf.convert_to_tensor(q_target, dtype=tf.float32))
 
         # Epsilon-Decay
-        # self.epsilon = max(self.epsilon * self.epsilon_dec, self.epsilon_min)
         self.epsilon = self.epsilon * self.epsilon_dec if self.epsilon > self.epsilon_min else self.epsilon_min
-        
+
 
     def update_network_parameters(self):
         """Kopiere Gewichte vom Eval- ins Target-Netzwerk"""
