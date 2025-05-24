@@ -14,7 +14,7 @@ CHECKPOINT_REWARD   = 1
 LIFE_REWARD         = 0
 CRASH_PENALTY       = -1
 
-#Fahrzeugparameter
+# Fahrzeugparameter
 CAR_WIDTH           = 14
 CAR_HEIGHT          = 30
 THRESHOLD           = int(math.hypot(CAR_WIDTH, CAR_HEIGHT)/2)  # ≈16 px
@@ -31,7 +31,7 @@ DRAW_WALLS          = False
 DRAW_CHECKPOINTS    = False
 DRAW_RAYS           = False
 
-# helper zum Normieren eines Winkelunterschieds auf [-π, +π]
+# Helper zum Normieren eines Winkelunterschieds auf [-π, +π]
 def _normalize_angle(delta):
     """Winkeldifferenz in [-π, π] bringen."""
     while delta > math.pi:
@@ -49,12 +49,12 @@ def is_checkpoint_passed(px, py, x1, y1, x2, y2, thresh):
     if denom == 0:
         return False  # Segment der Länge 0
     t = np.dot(AP, AB) / denom
-    # nur innerhalb des Segments [A,B] interessiert
+    # Nur innerhalb des Segments [A,B] interessiert
     if t < 0.0 or t > 1.0:
         return False
-    # nächster Punkt Q auf AB
+    # Nächster Punkt Q auf AB
     Q = np.array([x1, y1], dtype=np.float32) + t * AB
-    # quadratischer Abstand P↔Q
+    # Quadratischer Abstand P↔Q
     dist2 = (px - Q[0])**2 + (py - Q[1])**2
     return dist2 <= thresh * thresh
 
@@ -120,7 +120,7 @@ class Car:
         self.rect = self.image.get_rect().move(self.x, self.y)
         self.angle = math.radians(90)
         self.target_angle = self.angle
-        self.travel_angle = self.angle        # echte Fahr­richtung (für Drift)
+        self.travel_angle = self.angle       
         self.dvel = 1
         self.vel = 0
         self.velX = 0
@@ -232,7 +232,7 @@ class Car:
         self.closestRays = []
 
         for ray in self.rays:
-            closest = None #myPoint(0,0)
+            closest = None
             record = math.inf
             dir_x, dir_y = ray.dx, ray.dy
 
@@ -261,32 +261,20 @@ class Car:
                         record, closest = d, pt
 
             if closest: 
-                # append distance for current ray 
                 self.closestRays.append(closest)
                 observations.append(record)
-               
             else:
                 observations.append(SENSOR_RANGE)
 
-
         observations = np.array(observations, dtype=np.float32)
+        # NaN und Inf abfangen
         observations = np.nan_to_num(observations, nan=0.0, posinf=SENSOR_RANGE, neginf=0.0)
+        # Vektorisiertes Normalisieren auf [0,1]
         observations = (SENSOR_RANGE - observations) / SENSOR_RANGE
+        # Reste außerhalb [0,1] abschneiden
         observations = np.clip(observations, 0.0, 1.0)
-
-        # Sanity Check der Geschwindigkeit
-        if np.isnan(self.vel) or np.isinf(self.vel):
-            print(f"❌ Ungültige Geschwindigkeit: {self.vel}")
-            self.vel = 0.0
-
         # Geschwindigkeit anhängen (np.append → np.concatenate, um float32 zu behalten)
         observations = np.concatenate([observations, [self.vel / MAX_SPEED]]).astype(np.float32)
-
-        # Debug für NaN im Observation-Vektor
-        if np.isnan(observations).any():
-            print("❌ NaN in finalen Beobachtungen!")
-            print("self.vel:", self.vel)
-            print("observations:", observations)
 
         return observations
 
@@ -297,7 +285,7 @@ class Car:
         for x3, y3, x4, y4 in self.collision_lines:
             den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
             if den == 0:
-                continue  # parallel, kein Schnitt
+                continue  # Parallel, kein Schnitt
             t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den
             u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den
             if 0 < t < 1 and 0 < u < 1:
@@ -359,22 +347,22 @@ class GameEnvironment:
         self.car.update()
         reward = LIFE_REWARD
 
-        # 1) Check if car passes active Goal and scores
+        # Check ob Auto einen Checkpoint passiert hat
         for checkpoint_index, checkpoint in enumerate(self.checkpoints):
             if not checkpoint.isactiv:
                 continue
 
-            # benutze jetzt die neue score-Methode (Punkt-Segment-Abstand)
+            # Benutze jetzt die neue score-Methode (Punkt-Segment-Abstand)
             if self.car.score(checkpoint, THRESHOLD):
-                # deactivate current, activate next (zyklisch)
+                # Aktueller Checkpoint deaktivieren, nächster aktivieren
                 checkpoint.isactiv = False
                 prev_checkpoint_index = (checkpoint_index - 1) % len(self.checkpoints)
                 self.checkpoints[prev_checkpoint_index].isactiv = True
 
                 reward += CHECKPOINT_REWARD
-            break  # nur ein aktiver Checkpoint existiert zu jeder Zeit
+            break  # Nur ein aktiver Checkpoint existiert zu jeder Zeit
 
-        #check if car crashed in the wall
+        # Crash Erkennung
         for wall in self.walls:
             if self.car.collision(wall):
                 reward += CRASH_PENALTY
