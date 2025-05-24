@@ -93,7 +93,7 @@ class DQNAgent(object):
         action = int(tf.argmax(q_values[0]))
         return action
     
-    def learn(self, episode_num=None):
+    def learn(self):
         """
         Ziehe Batch aus Replay Buffer, berechne Ziel-Q-Werte,
         und führe einen Trainingsschritt auf dem Eval-Netzwerk aus.
@@ -105,11 +105,6 @@ class DQNAgent(object):
         states, actions, rewards, states_, dones = \
             self.memory.sample_buffer(self.batch_size)
 
-        # NaN-Debugging für Replay Buffer
-        if np.any(np.isnan(states)) or np.any(np.isnan(states_)):
-            print("❌ NaN in states oder next_states gefunden!")
-            return
-
         # Tensor-Conversion
         states_tensor  = tf.convert_to_tensor(states, dtype=tf.float32)
         next_tensor    = tf.convert_to_tensor(states_, dtype=tf.float32)
@@ -118,85 +113,23 @@ class DQNAgent(object):
         q_next = self.target_network.q_eval(next_tensor)
         q_pred = self.eval_network.q_eval(states_tensor)
 
-        # NaN-Debugging in q_next/q_pred
-        if tf.math.reduce_any(tf.math.is_nan(q_next)):
-            tf.print("❌ NaN in q_next!")
-        if tf.math.reduce_any(tf.math.is_nan(q_pred)):
-            tf.print("❌ NaN in q_pred!")
-
         # Ziel-Q-Werte in NumPy berechnen
         q_target = q_pred.numpy()
         batch_idx = np.arange(self.batch_size, dtype=np.int32)
         action_values = np.array(self.action_space, dtype=np.int32)
         action_idx = np.dot(actions, action_values)
 
-        q_target[batch_idx, action_idx] = (
-            rewards + self.gamma * np.max(q_next.numpy(), axis=1) * dones
-        )
+        q_target[batch_idx, action_idx] = (rewards + self.gamma * np.max(q_next.numpy(), axis=1) * dones)
 
         # Clipping zur Sicherheit
         q_target = np.clip(q_target, -1e3, 1e3)
 
         # Training + NaN-Prüfung
-        loss = self.eval_network.train_step(
-            states_tensor, tf.convert_to_tensor(q_target, dtype=tf.float32)
-        )
-
-        if tf.math.reduce_any(tf.math.is_nan(loss)):
-            tf.print("❌ NaN im Loss – Trainingsschritt abgebrochen!")
-            return
-
-        # Optional: Loss nur alle 10 Episoden
-        if episode_num is not None and episode_num % 10 == 0:
-            print(f"📉 [Episode {episode_num}] Loss: {loss.numpy():.4f}, Epsilon: {self.epsilon:.3f}")
+        self.eval_network.train_step(states_tensor, tf.convert_to_tensor(q_target, dtype=tf.float32))
 
         # Epsilon-Decay
         self.epsilon = self.epsilon * self.epsilon_dec if self.epsilon > self.epsilon_min else self.epsilon_min
 
-
-    def learn2(self):
-        """
-        Ziehe Batch aus Replay Buffer, berechne Ziel-Q-Werte,
-        und führe einen Trainingsschritt auf dem Eval-Netzwerk aus.
-        """
-        if self.memory.mem_cntr < self.batch_size:
-            return
-
-        # Sample aus Replay Buffer
-        states, actions, rewards, states_, dones = \
-            self.memory.sample_buffer(self.batch_size)
-
-        # Tensor-Conversion
-        states_tensor  = tf.convert_to_tensor(states, dtype=tf.float32)
-        next_tensor    = tf.convert_to_tensor(states_, dtype=tf.float32)
-
-        # Graph-Eval beider Netze
-        q_next = self.target_network.q_eval(next_tensor)
-        q_pred = self.eval_network.q_eval(states_tensor)
-        
-        # Ziel-Q-Werte in NumPy berechnen
-        q_target = q_pred.numpy()
-        batch_idx = np.arange(self.batch_size, dtype=np.int32)
-        # Aktion-Indices berechnen
-        action_values = np.array(self.action_space, dtype=np.int32)
-        action_idx = np.dot(actions, action_values)
-        # Q-Ziel setzen
-        q_target[batch_idx, action_idx] = (
-            rewards + self.gamma * np.max(q_next.numpy(), axis=1) * dones
-        )
-
-        
-        # Graph-Trainings-Schritt via tf.function
-        #loss = self.eval_network.train_step(states_tensor, tf.convert_to_tensor(q_target, dtype=tf.float32))
-       
-
-        # Optional: regelmäßig Loss anzeigen
-        print(f"Loss: {loss.numpy():.4f}, Epsilon: {self.epsilon:.3f}")
-
-        # Epsilon-Decay
-        # self.epsilon = max(self.epsilon * self.epsilon_dec, self.epsilon_min)
-        self.epsilon = self.epsilon * self.epsilon_dec if self.epsilon > self.epsilon_min else self.epsilon_min
-        
 
     def update_network_parameters(self):
         """Kopiere Gewichte vom Eval- ins Target-Netzwerk"""
