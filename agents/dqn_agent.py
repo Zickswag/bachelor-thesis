@@ -33,7 +33,6 @@ class ReplayBuffer(object):
         else:
             self.action_memory[index] = action
         self.reward_memory[index] = reward
-        #self.terminal_memory[index] = 1 - done
         self.terminal_memory[index] = 0.0 if done else 1.0
         self.mem_cntr += 1
 
@@ -57,16 +56,16 @@ class DQNAgent(object):
     Deep Q-Network Agent mit Target-Network, Epsilon-Greedy Exploration
     und Experience Replay.
     """
-    def __init__(self, alpha, gamma, actions, epsilon, batch_size, input_dims, epsilon_dec, epsilon_end, mem_size, replace_target, layers, fname):
+    def __init__(self, alpha, gamma, actions, epsilon, batch_size, input_dims, epsilon_decay_steps, epsilon_end, mem_size, replace_target_steps, layers, fname):
         self.action_space = [i for i in range(actions)]
         self.n_actions = actions
         self.gamma = gamma
         self.epsilon = epsilon
-        self.epsilon_dec = epsilon_dec
+        self.epsilon_decay_steps = epsilon_decay_steps
         self.epsilon_min = epsilon_end
         self.batch_size = batch_size
         self.model_file = fname
-        self.replace_target = replace_target
+        self.replace_target_steps = replace_target_steps
         self.memory = ReplayBuffer(mem_size, input_dims, actions, discrete=True)
         self.layers = layers
 
@@ -75,6 +74,8 @@ class DQNAgent(object):
         self.target_network = QNetwork(input_dims, actions, batch_size, alpha, layers)
         self.target_network.copy_weights(self.eval_network)
 
+        self.learn_step_counter = 0 
+        self.epsilon_decay_value = (self.epsilon - self.epsilon_min) / self.epsilon_decay_steps
         
     def remember(self, state, action, reward, new_state, done):
         """Speichere die Erfahrung im Replay Buffer"""
@@ -99,7 +100,7 @@ class DQNAgent(object):
         und führe einen Trainingsschritt auf dem Eval-Netzwerk aus.
         """
         if self.memory.mem_cntr < self.batch_size:
-            return
+            return None
 
         # Sample aus Replay Buffer
         states, actions, rewards, states_, dones = \
@@ -108,6 +109,12 @@ class DQNAgent(object):
         # Tensor-Conversion
         states_tensor  = tf.convert_to_tensor(states, dtype=tf.float32)
         next_tensor    = tf.convert_to_tensor(states_, dtype=tf.float32)
+
+        self.learn_step_counter += 1
+        # Target-Netzwerk-Update basierend auf Lernschritten
+        if self.learn_step_counter % self.replace_target_steps == 0:
+            self.update_network_parameters()
+            print(f"Target network updated at learn step {self.learn_step_counter}")
 
         # Graph-Eval beider Netze
         q_next = self.target_network.q_eval(next_tensor)
@@ -128,7 +135,13 @@ class DQNAgent(object):
         self.eval_network.train_step(states_tensor, tf.convert_to_tensor(q_target, dtype=tf.float32))
 
         # Epsilon-Decay
-        self.epsilon = self.epsilon * self.epsilon_dec if self.epsilon > self.epsilon_min else self.epsilon_min
+        if self.epsilon > self.epsilon_min:
+            self.epsilon -= self.epsilon_decay_value
+            self.epsilon = max(self.epsilon_min, self.epsilon)
+
+        # Q-Value Schätzung für Logging
+        avg_max_q_estimate = tf.reduce_mean(tf.reduce_max(q_pred, axis=1)).numpy()
+        return avg_max_q_estimate
 
 
     def update_network_parameters(self):
