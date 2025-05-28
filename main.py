@@ -5,21 +5,22 @@ seed = int(os.environ.get('PYTHONHASHSEED', '0'))
 
 # 1) Parse alle Argumente (inkl. seed) direkt am Anfang
 parser = argparse.ArgumentParser(description="Train DQN/DDQN on top-down race")
-parser.add_argument("--agent",          choices=["dqn","ddqn"], default="dqn")
-parser.add_argument("--layers",         nargs="+",              type=int, default=[17,17,17])
-parser.add_argument("--lr",             type=float,             default=0.0005)
-parser.add_argument("--gamma",          type=float,             default=0.99)
-parser.add_argument("--batch_size",     type=int,               default=512)
-parser.add_argument("--mem_size",       type=int,               default=25000)
-parser.add_argument("--replace",        type=int,               default=50)
-parser.add_argument("--save_interval",  type=int,               default=10)
-parser.add_argument("--epsilon-start",  type=float,             default=1.0)
-parser.add_argument("--epsilon-end",    type=float,             default=0.1)
-parser.add_argument("--epsilon-decay",  type=float,             default=0.9995)
-parser.add_argument("--render_freq",    type=int,               default=0)
-parser.add_argument("--max_steps",      type=int,               default=3000000)
-parser.add_argument("--run_name",       type=str,               default=None)
-parser.add_argument("--is_pipeline",    action="store_true")
+parser.add_argument("--agent",                  choices=["dqn","ddqn"], default="dqn")
+parser.add_argument("--layers",                 nargs="+",              type=int, default=[17,17,17])
+parser.add_argument("--lr",                     type=float,             default=0.0005)
+parser.add_argument("--gamma",                  type=float,             default=0.99)
+parser.add_argument("--batch_size",             type=int,               default=512)
+parser.add_argument("--mem_size",               type=int,               default=1000000)
+parser.add_argument("--exploration_steps",      type=int,               default=12500)
+parser.add_argument("--replace_target_steps",   type=int,               default=2500)
+parser.add_argument("--save_interval",          type=int,               default=10)
+parser.add_argument("--epsilon-start",          type=float,             default=1.0)
+parser.add_argument("--epsilon-end",            type=float,             default=0.1)
+parser.add_argument("--epsilon_decay_steps",    type=int,               default=250000)
+parser.add_argument("--render_freq",            type=int,               default=0)
+parser.add_argument("--max_steps",              type=int,               default=3000000)
+parser.add_argument("--run_name",               type=str,               default=None)
+parser.add_argument("--is_pipeline",            action="store_true")
 args = parser.parse_args()
 
 import datetime, shutil, json, csv
@@ -99,7 +100,7 @@ def main():
     # CSV-Metriken
     metrics_fp  = open(os.path.join(run_dir, "metrics.csv"), "w", newline="")
     metrics_csv = csv.writer(metrics_fp)
-    metrics_csv.writerow(["episode","global_steps","score","avg_score","epsilon"])
+    metrics_csv.writerow(["episode","global_steps","score","avg_score","epsilon","avg_max_q"])
 
     # Spiel-Umgebung
     game = game_environment.GameEnvironment()
@@ -115,10 +116,10 @@ def main():
         input_dims=INPUT_DIMS,
         epsilon=args.epsilon_start,
         epsilon_end=args.epsilon_end,
-        epsilon_dec=args.epsilon_decay,
+        epsilon_decay_steps=args.epsilon_decay_steps,
         alpha=args.lr,
         gamma=args.gamma,
-        replace_target=args.replace,
+        replace_target_steps=args.replace_target_steps,
         mem_size=args.mem_size,
         batch_size=args.batch_size,
         layers=args.layers,
@@ -148,7 +149,11 @@ def main():
                     return
 
             # Agent wählt Aktion basierend auf aktuellem Zustand
-            action = agent.choose_action(state)
+            if global_steps < args.exploration_steps:
+                action = random.choice(agent.action_space) 
+            else:
+                action = agent.choose_action(state)
+
             next_state, reward, done = game.step(action)
 
             # obs_ kann None sein, wenn das Spiel vorbei ist
@@ -183,7 +188,11 @@ def main():
             if obs_valid:
                 # fülle Replay-Buffer mit gültiger Transition
                 agent.remember(state, action, reward, next_state, int(done))
-                agent.learn()
+
+                if global_steps >= args.exploration_steps:
+                    current_avg_max_q = agent.learn()
+                else: # Während der initialen Exploration nicht lernen
+                    current_avg_max_q = None
                 # Aktualisiere aktuellen Zustand
                 state = next_state
 
@@ -200,10 +209,6 @@ def main():
         eps_history.append(agent.epsilon)
         avg_score = np.mean(scores[-100:])
 
-        # Target-Netzwerk
-        if episode % args.replace == 0 and episode > 0:
-            agent.update_network_parameters()
-
         # Modell speichern
         if episode % args.save_interval == 0 and episode > 0:
             agent.save_model(episode)
@@ -212,6 +217,7 @@ def main():
         # Ausgabe
         print(f"Episode: {episode}, Steps: {global_steps}, Score: {score},"
               f" Average: {avg_score:.2f}, Epsilon: {agent.epsilon:.2f}")
+        #TODO: Aktuelle Q-Werte loggen, wenn verfügbar
 
         # TensorBoard-Logging
         with writer.as_default():
@@ -219,9 +225,11 @@ def main():
             tf.summary.scalar("score", score, step=global_steps)
             tf.summary.scalar("avg_score", avg_score, step=global_steps)
             tf.summary.scalar("epsilon", agent.epsilon, step=global_steps)
+            if current_avg_max_q is not None: # Nur loggen, wenn gelernt wurde
+                tf.summary.scalar("avg_max_q_estimate", current_avg_max_q, step=global_steps)
 
         # CSV-Log
-        metrics_csv.writerow([episode, global_steps, score, avg_score, agent.epsilon])
+        metrics_csv.writerow([episode, global_steps, score, avg_score, agent.epsilon, current_avg_max_q if current_avg_max_q is not None else np.nan])
         metrics_fp.flush()
 
     metrics_fp.close()
