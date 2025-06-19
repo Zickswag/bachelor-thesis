@@ -120,7 +120,8 @@ class Car:
         self.rect = self.image.get_rect().move(self.x, self.y)
         self.angle = math.radians(90)
         self.target_angle = self.angle
-        self.travel_angle = self.angle       
+        self.travel_angle = self.angle
+        self.angular_velocity = 0.0   
         self.dvel = 1
         self.vel = 0
         self.velX = 0
@@ -169,7 +170,9 @@ class Car:
 
         # 2) Fahrtrichtung (travel_angle) schwenkt nur teilweise zur neuen Ausrichtung
         delta = _normalize_angle(self.angle - self.travel_angle)
-        self.travel_angle += delta * DRIFT_FACTOR
+        # Winkelgeschwindigkeit ist die Änderung des travel_angle pro Frame
+        self.angular_velocity = delta * DRIFT_FACTOR
+        self.travel_angle += self.angular_velocity
 
         # 3) Neue Geschwindigkeitskomponenten aus travel_angle berechnen
         sa = math.sin(self.travel_angle)
@@ -273,8 +276,17 @@ class Car:
         observations = (SENSOR_RANGE - observations) / SENSOR_RANGE
         # Reste außerhalb [0,1] abschneiden
         observations = np.clip(observations, 0.0, 1.0)
+
+        max_angular_vel = TURN_ANGLE_RAD * DRIFT_FACTOR
+        normalized_angular_vel = np.clip(self.angular_velocity / max_angular_vel, -1.0, 1.0)
+
+        additional_features = np.array([
+            self.vel / MAX_SPEED,
+            normalized_angular_vel
+        ], dtype=np.float32)
+
         # Geschwindigkeit anhängen (np.append → np.concatenate, um float32 zu behalten)
-        observations = np.concatenate([observations, [self.vel / MAX_SPEED]]).astype(np.float32)
+        observations = np.concatenate([observations, additional_features]).astype(np.float32)
 
         return observations
 
@@ -306,6 +318,7 @@ class Car:
         self.vel = 0
         self.angle = math.radians(90)
         self.target_angle = self.angle
+        self.travel_angle = self.angle
         self.points = 0
         self.pt1 = Point(self.pt.x - self.width / 2, self.pt.y - self.height / 2)
         self.pt2 = Point(self.pt.x + self.width / 2, self.pt.y - self.height / 2)

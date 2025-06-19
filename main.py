@@ -12,13 +12,13 @@ parser.add_argument("--gamma",                  type=float,             default=
 parser.add_argument("--batch_size",             type=int,               default=512)
 parser.add_argument("--mem_size",               type=int,               default=1000000)
 parser.add_argument("--exploration_steps",      type=int,               default=12500)
-parser.add_argument("--replace_target_steps",   type=int,               default=2500)
-parser.add_argument("--save_interval",          type=int,               default=10)
+parser.add_argument("--replace_target_steps",   type=int,               default=10000)
+parser.add_argument("--save_interval",          type=int,               default=100)
 parser.add_argument("--epsilon-start",          type=float,             default=1.0)
 parser.add_argument("--epsilon-end",            type=float,             default=0.1)
 parser.add_argument("--epsilon_decay_steps",    type=int,               default=250000)
 parser.add_argument("--render_freq",            type=int,               default=0)
-parser.add_argument("--max_steps",              type=int,               default=3000000)
+parser.add_argument("--max_steps",              type=int,               default=5000000)
 parser.add_argument("--run_name",               type=str,               default=None)
 parser.add_argument("--is_pipeline",            action="store_true")
 args = parser.parse_args()
@@ -45,7 +45,7 @@ tf.config.threading.set_intra_op_parallelism_threads(14)
 
 # Konstanten
 ACTIONS                 = 5
-INPUT_DIMS              = 17
+INPUT_DIMS              = 18
 MAX_CHECKPOINT_STEPS    = 100
 MAX_EPISODE_STEPS       = 1000
 EXPERIMENTS_DIR         = "experiments"
@@ -214,14 +214,18 @@ def main():
             agent.save_model(episode)
             print(f"Saved model at episode {episode}")
 
+        q_value_str = f"{current_avg_max_q:.2f}" if current_avg_max_q is not None else "N/A"
+
         # Ausgabe
-        print(f"Episode: {episode}, Steps: {global_steps}, Score: {score},"
-              f" Average: {avg_score:.2f}, Epsilon: {agent.epsilon:.2f}")
-        #TODO: Aktuelle Q-Werte loggen, wenn verfügbar
+        print(f"Episode: {episode}, Ep. Length: {episode_steps},"
+              f"Ep. Length: {episode_steps} Steps: {global_steps}, Score: {score},"
+              f" Average: {avg_score:.2f}, Epsilon: {agent.epsilon:.2f}, "
+              f"Avg Max Q: {q_value_str}")
 
         # TensorBoard-Logging
         with writer.as_default():
             tf.summary.scalar("global_steps", global_steps, step=global_steps)
+            tf.summary.scalar("episode_length", episode_steps)
             tf.summary.scalar("score", score, step=global_steps)
             tf.summary.scalar("avg_score", avg_score, step=global_steps)
             tf.summary.scalar("epsilon", agent.epsilon, step=global_steps)
@@ -229,7 +233,7 @@ def main():
                 tf.summary.scalar("avg_max_q_estimate", current_avg_max_q, step=global_steps)
 
         # CSV-Log
-        metrics_csv.writerow([episode, global_steps, score, avg_score, agent.epsilon, current_avg_max_q if current_avg_max_q is not None else np.nan])
+        metrics_csv.writerow([episode, episode_steps, global_steps, score, avg_score, agent.epsilon, current_avg_max_q if current_avg_max_q is not None else np.nan])
         metrics_fp.flush()
 
     metrics_fp.close()
