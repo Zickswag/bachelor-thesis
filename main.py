@@ -217,15 +217,15 @@ def main():
         q_value_str = f"{current_avg_max_q:.2f}" if current_avg_max_q is not None else "N/A"
 
         # Ausgabe
-        print(f"Episode: {episode}, Ep. Length: {episode_steps},"
-              f"Ep. Length: {episode_steps} Steps: {global_steps}, Score: {score},"
-              f" Average: {avg_score:.2f}, Epsilon: {agent.epsilon:.2f}, "
-              f"Avg Max Q: {q_value_str}")
+        print(f"Episode: {episode},"
+              f" Steps: {global_steps}, Score: {score},"
+              f" Average: {avg_score:.2f}, Epsilon: {agent.epsilon:.2f},"
+              f" Length: {episode_steps}, Avg Max Q: {q_value_str}")
 
         # TensorBoard-Logging
         with writer.as_default():
             tf.summary.scalar("global_steps", global_steps, step=global_steps)
-            tf.summary.scalar("episode_length", episode_steps)
+            tf.summary.scalar("episode_length", episode_steps, step=global_steps)
             tf.summary.scalar("score", score, step=global_steps)
             tf.summary.scalar("avg_score", avg_score, step=global_steps)
             tf.summary.scalar("epsilon", agent.epsilon, step=global_steps)
