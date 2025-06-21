@@ -10,7 +10,7 @@ parser.add_argument("--layers",                 nargs="+",              type=int
 parser.add_argument("--lr",                     type=float,             default=0.0000625)
 parser.add_argument("--gamma",                  type=float,             default=0.99)
 parser.add_argument("--batch_size",             type=int,               default=512)
-parser.add_argument("--mem_size",               type=int,               default=1000000)
+parser.add_argument("--mem_size",               type=int,               default=250000)
 parser.add_argument("--exploration_steps",      type=int,               default=12500)
 parser.add_argument("--replace_target_steps",   type=int,               default=10000)
 parser.add_argument("--save_interval",          type=int,               default=100)
