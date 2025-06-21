@@ -1,8 +1,0 @@
-__pycache__/
-experiments/
-venv/
-*.py[cod]
-*.pyo
-*.prof
-*.keras
-__init__.py
