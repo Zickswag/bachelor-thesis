@@ -1,0 +1,23 @@
+{
+  "agent": "dqn",
+  "layers": [
+    18,
+    18,
+    18
+  ],
+  "lr": 6.25e-05,
+  "gamma": 0.99,
+  "batch_size": 512,
+  "mem_size": 250000,
+  "exploration_steps": 12500,
+  "replace_target_steps": 10000,
+  "save_interval": 100,
+  "epsilon_start": 1.0,
+  "epsilon_end": 0.1,
+  "epsilon_decay_steps": 250000,
+  "render_freq": 0,
+  "max_steps": 5000000,
+  "run_name": null,
+  "is_pipeline": false,
+  "seed": 0
+}
