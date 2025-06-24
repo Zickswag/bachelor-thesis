@@ -1,5 +1,115 @@
-# bachelor-thesis
+# Kompensation des Overestimation Bias: Ein Vergleich von DQN und DDQN
 
-$env:PYTHONHASHSEED = "0"; python main.py --agent dqn --lr 0.0001 --gamma 0.99 --batch_size 512 --mem_size 1000000 --layers 22 22 22 --max_steps 20000000 --replace_target_steps 2500 --epsilon_decay_steps 250000 --save_interval 100 --render_freq 0
+Dieses Repository enthält den vollständigen Quellcode und die experimentellen Daten für die Bachelor-Thesis "Kompensation des Overestimation Bias im Reinforcement Learning: Ein Vergleich von DQN und DDQN in einer Rennspielumgebung".
 
-Macbook: PYTHONHASHSEED=0 python main.py --agent dqn --lr 0.0001 --gamma 0.99 --batch_size 512 --mem_size 1000000 --layers 22 22 22 --max_steps 20000000 --replace_target_steps 2500 --epsilon_decay_steps 250000 --save_interval 100 --render_freq 0
+Das Projekt untersucht, ob der durch Double Deep Q-Networks (DDQN) eingeführte Mechanismus zur Reduzierung der Q-Wert-Überschätzung auch in einer merkmalsbasierten, deterministischen Rennspielumgebung zu einer messbar überlegenen Performanz im Vergleich zum Standard-Deep-Q-Network (DQN) führt.
+
+## Kurze Erklärung
+
+Das Projekt besteht aus zwei Hauptteilen:
+1.  **Einer benutzerdefinierten 2D-Rennspielumgebung**, die mit Pygame entwickelt wurde. Die Umgebung liefert dem Agenten einen 18-dimensionalen Zustandsvektor, bestehend aus 16 Distanzsensoren sowie der linearen und der Winkelgeschwindigkeit des Fahrzeugs.
+2.  **Einer Implementierung der DQN- und DDQN-Algorithmen** unter Verwendung von TensorFlow und Keras. Beide Agenten nutzen exakt dieselbe Netzwerkarchitektur und Hyperparameter, um einen fairen und kontrollierten Vergleich zu ermöglichen.
+
+Alle Experimente, Konfigurationen und Ergebnisse werden automatisch im `experiments/`-Verzeichnis gespeichert.
+
+## Installationsanleitung
+
+Das Projekt wurde mit Python 3.x entwickelt. Um die notwendigen Pakete zu installieren, wird die Verwendung einer virtuellen Umgebung (z.B. mit `venv`) empfohlen.
+
+### 1. Klonen des Repositories:
+
+```bash
+git clone https://github.com/Zickswag/bachelor-thesis.git
+cd bachelor-thesis
+````
+
+### 2. Erstellen und Aktivieren einer virtuellen Umgebung (optional, aber empfohlen):
+
+#### Windows:
+
+```bash
+python -m venv venv
+.\venv\Scripts\activate
+```
+
+#### macOS / Linux:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 3. Installation der Abhängigkeiten:
+
+```bash
+pip install tensorflow
+pip install pygame
+pip install numpy
+```
+
+## Training der Agenten
+
+Das Training wird über das Hauptskript `main.py` gesteuert.
+
+### Einfacher Start
+
+Um ein Training mit den Standardparametern zu starten, führen Sie folgenden Befehl aus:
+
+```bash
+python main.py
+```
+
+Standardmäßig wird der DQN-Agent trainiert. Um den DDQN-Agenten zu trainieren:
+
+```bash
+python main.py --agent ddqn
+```
+
+Die Ergebnisse, Logs und Modell-Checkpoints werden automatisch in einem neuen Ordner unter `experiments/[agent-name]/[timestamp]/` gespeichert.
+
+### Reproduktion der Thesis-Ergebnisse
+
+Für die in der Arbeit präsentierten Ergebnisse wurde ein fester Satz von 10 Seeds verwendet, um die statistische Robustheit zu gewährleisten. Die verwendeten Seeds sind:
+
+`[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]`
+
+Um einen spezifischen Lauf zu reproduzieren (z.B. DQN mit Seed 42), setzen Sie die Umgebungsvariable `PYTHONHASHSEED` vor dem Start:
+
+#### macOS / Linux:
+
+```bash
+PYTHONHASHSEED=42 python main.py --agent dqn
+```
+
+#### Windows (PowerShell):
+
+```powershell
+$env:PYTHONHASHSEED=42; python main.py --agent dqn
+```
+
+---
+
+## Optionale Parameter
+
+Das Skript `main.py` akzeptiert folgende Kommandozeilenargumente zur Steuerung der Hyperparameter:
+
+| Argument                 | Standardwert | Erklärung                                                          |
+| ------------------------ | ------------ | ------------------------------------------------------------------ |
+| `--agent`                | "dqn"        | Wählt den Agenten-Typ aus (`dqn` oder `ddqn`).                     |
+| `--layers`               | 18 18 18     | Anzahl der Neuronen in den versteckten Schichten.                  |
+| `--lr`                   | 0.0001       | Lernrate für den Adam-Optimizer.                                   |
+| `--gamma`                | 0.99         | Diskontfaktor für zukünftige Belohnungen.                          |
+| `--batch_size`           | 512          | Anzahl der Transitionen pro Trainings-Batch.                       |
+| `--mem_size`             | 250000       | Maximale Anzahl an Transitionen im Replay Buffer.                  |
+| `--exploration_steps`    | 12500        | Anzahl der zufälligen Schritte zu Beginn zum Füllen des Buffers.   |
+| `--replace_target_steps` | 10000        | Häufigkeit, mit der das Target-Netzwerk aktualisiert wird.         |
+| `--save_interval`        | 100          | Speichert das Modell alle X Episoden.                              |
+| `--epsilon-start`        | 1.0          | Startwert für die epsilon-greedy Strategie.                        |
+| `--epsilon-end`          | 0.1          | Minimaler Wert für epsilon.                                        |
+| `--epsilon_decay_steps`  | 250000       | Anzahl der Schritte zur linearen Epsilon-Reduktion.                |
+| `--render_freq`          | 0            | Renderfrequenz der Umgebung. 0 bedeutet kein Rendern.              |
+| `--max_steps`            | 50000000     | Gesamtanzahl der Trainingsschritte.                                |
+| `--run_name`             | None         | Benutzerdefinierter Name für den Trainingslauf.                    |
+| `--is_pipeline`          | False        | Flag für automatisierte Pipeline-Läufe (Ordnerstruktur-Anpassung). |
+
+
