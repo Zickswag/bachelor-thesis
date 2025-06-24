@@ -87,6 +87,23 @@ PYTHONHASHSEED=42 python main.py --agent dqn
 $env:PYTHONHASHSEED=42; python main.py --agent dqn
 ```
 
+## Monitoring und Evaluation
+
+Die Ergebnisse jedes Trainingslaufs werden auf zwei Arten protokolliert, um eine Analyse zu ermöglichen:
+
+### 1. Live-Monitoring mit TensorBoard
+
+Alle wichtigen Metriken werden in Echtzeit in TensorBoard-Logs geschrieben. Um den Trainingsfortschritt live zu überwachen oder nach Abschluss zu analysieren, starten Sie TensorBoard und verweisen auf das `experiments`-Verzeichnis:
+
+```bash
+tensorboard --logdir experiments
+```
+Öffnen Sie anschließend die in der Konsole angezeigte URL (üblicherweise `http://localhost:6006`) in Ihrem Browser. Dort können Sie die Lernkurven für verschiedene Läufe vergleichen.
+
+### 2. Rohdaten als CSV
+
+Für eine detaillierte statistische Analyse werden alle Metriken zusätzlich in einer `metrics.csv`-Datei innerhalb des jeweiligen Run-Verzeichnisses gespeichert. Diese Dateien bilden die Grundlage für die in der Thesis erstellten aggregierten Graphen und weiterführenden Analysen.
+
 ---
 
 ## Optionale Parameter
@@ -97,19 +114,18 @@ Das Skript `main.py` akzeptiert folgende Kommandozeilenargumente zur Steuerung d
 | ------------------------ | ------------ | ------------------------------------------------------------------ |
 | `--agent`                | "dqn"        | Wählt den Agenten-Typ aus (`dqn` oder `ddqn`).                     |
 | `--layers`               | 18 18 18     | Anzahl der Neuronen in den versteckten Schichten.                  |
-| `--lr`                   | 0.0001       | Lernrate für den Adam-Optimizer.                                   |
-| `--gamma`                | 0.99         | Diskontfaktor für zukünftige Belohnungen.                          |
+| `--lr`                   | 0.0001       | Lernrate ($\alpha$) für den Adam-Optimizer.                        |
+| `--gamma`                | 0.99         | Diskontfaktor ($\gamma$) für zukünftige Belohnungen.               |
 | `--batch_size`           | 512          | Anzahl der Transitionen pro Trainings-Batch.                       |
 | `--mem_size`             | 250000       | Maximale Anzahl an Transitionen im Replay Buffer.                  |
 | `--exploration_steps`    | 12500        | Anzahl der zufälligen Schritte zu Beginn zum Füllen des Buffers.   |
 | `--replace_target_steps` | 10000        | Häufigkeit, mit der das Target-Netzwerk aktualisiert wird.         |
 | `--save_interval`        | 100          | Speichert das Modell alle X Episoden.                              |
-| `--epsilon-start`        | 1.0          | Startwert für die epsilon-greedy Strategie.                        |
-| `--epsilon-end`          | 0.1          | Minimaler Wert für epsilon.                                        |
+| `--epsilon-start`        | 1.0          | Startwert für die $\epsilon$-greedy Strategie.                     |
+| `--epsilon-end`          | 0.1          | Minimaler Wert für $\epsilon$.                                     |
 | `--epsilon_decay_steps`  | 250000       | Anzahl der Schritte zur linearen Epsilon-Reduktion.                |
-| `--render_freq`          | 0            | Renderfrequenz der Umgebung. 0 bedeutet kein Rendern.              |
+| `--render_freq`          | 0            | Renderfrequenz der Umgebung. `0` bedeutet kein Rendern.            |
 | `--max_steps`            | 50000000     | Gesamtanzahl der Trainingsschritte.                                |
 | `--run_name`             | None         | Benutzerdefinierter Name für den Trainingslauf.                    |
 | `--is_pipeline`          | False        | Flag für automatisierte Pipeline-Läufe (Ordnerstruktur-Anpassung). |
-
 
