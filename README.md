@@ -69,22 +69,22 @@ Die Ergebnisse, Logs und Modell-Checkpoints werden automatisch in einem neuen Or
 
 ### Reproduktion der Thesis-Ergebnisse
 
-Für die in der Arbeit präsentierten Ergebnisse wurde ein fester Satz von 10 Seeds verwendet, um die statistische Robustheit zu gewährleisten. Die verwendeten Seeds sind:
+Für die in der Arbeit präsentierten Ergebnisse wurde ein fester Satz von 5 Seeds verwendet, um die statistische Robustheit zu gewährleisten. Die verwendeten Seeds sind:
 
-`[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]`
+`[0, 1, 2, 3, 4]`
 
-Um einen spezifischen Lauf zu reproduzieren (z.B. DQN mit Seed 42), setzen Sie die Umgebungsvariable `PYTHONHASHSEED` vor dem Start:
+Um einen spezifischen Lauf zu reproduzieren (z.B. DQN mit Seed 3), setzen Sie die Umgebungsvariable `PYTHONHASHSEED` vor dem Start:
 
 #### macOS / Linux:
 
 ```bash
-PYTHONHASHSEED=42 python main.py --agent dqn
+PYTHONHASHSEED=3 python main.py --agent dqn
 ```
 
 #### Windows (PowerShell):
 
 ```powershell
-$env:PYTHONHASHSEED=42; python main.py --agent dqn
+$env:PYTHONHASHSEED=3; python main.py --agent dqn
 ```
 
 ## Monitoring und Evaluation
@@ -103,6 +103,15 @@ tensorboard --logdir experiments
 ### 2. Rohdaten als CSV
 
 Für eine detaillierte statistische Analyse werden alle Metriken zusätzlich in einer `metrics.csv`-Datei innerhalb des jeweiligen Run-Verzeichnisses gespeichert. Diese Dateien bilden die Grundlage für die in der Thesis erstellten aggregierten Graphen und weiterführenden Analysen.
+
+### 3. Ergebnisse
+Die folgenden Abbildungen zeigen die aggregierten Resultate aus den Experimenten:
+
+**Trainingsverlauf über alle Seeds** 
+![Trainingsverlauf](results/score_comparison.png)
+
+**Vergleich der geschätzten Q-Werte** 
+![Q Werte](results/qvalue_comparison.png)
 
 ---
 
