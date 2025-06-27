@@ -130,11 +130,9 @@ Das Skript `main.py` akzeptiert folgende Kommandozeilenargumente zur Steuerung d
 | `--exploration_steps`    | 12500        | Anzahl der zufälligen Schritte zu Beginn zum Füllen des Buffers.   |
 | `--replace_target_steps` | 10000        | Häufigkeit, mit der das Target-Netzwerk aktualisiert wird.         |
 | `--save_interval`        | 100          | Speichert das Modell alle X Episoden.                              |
-| `--epsilon-start`        | 1.0          | Startwert für die $\epsilon$-greedy Strategie.                     |
-| `--epsilon-end`          | 0.1          | Minimaler Wert für $\epsilon$.                                     |
+| `--epsilon_start`        | 1.0          | Startwert für die $\epsilon$-greedy Strategie.                     |
+| `--epsilon_end`          | 0.1          | Minimaler Wert für $\epsilon$.                                     |
 | `--epsilon_decay_steps`  | 250000       | Anzahl der Schritte zur linearen Epsilon-Reduktion.                |
 | `--render_freq`          | 0            | Renderfrequenz der Umgebung. `0` bedeutet kein Rendern.            |
 | `--max_steps`            | 50000000     | Gesamtanzahl der Trainingsschritte.                                |
-| `--run_name`             | None         | Benutzerdefinierter Name für den Trainingslauf.                    |
-| `--is_pipeline`          | False        | Flag für automatisierte Pipeline-Läufe (Ordnerstruktur-Anpassung). |
 

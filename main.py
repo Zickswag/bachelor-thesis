@@ -14,13 +14,11 @@ parser.add_argument("--mem_size",               type=int,               default=
 parser.add_argument("--exploration_steps",      type=int,               default=12500)
 parser.add_argument("--replace_target_steps",   type=int,               default=10000)
 parser.add_argument("--save_interval",          type=int,               default=100)
-parser.add_argument("--epsilon-start",          type=float,             default=1.0)
-parser.add_argument("--epsilon-end",            type=float,             default=0.1)
+parser.add_argument("--epsilon_start",          type=float,             default=1.0)
+parser.add_argument("--epsilon_end",            type=float,             default=0.1)
 parser.add_argument("--epsilon_decay_steps",    type=int,               default=250000)
 parser.add_argument("--render_freq",            type=int,               default=0)
 parser.add_argument("--max_steps",              type=int,               default=50000000)
-parser.add_argument("--run_name",               type=str,               default=None)
-parser.add_argument("--is_pipeline",            action="store_true")
 args = parser.parse_args()
 
 import datetime, shutil, json, csv
