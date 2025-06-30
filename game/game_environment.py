@@ -385,7 +385,7 @@ class GameEnvironment:
         state = None if done else self.car.cast(self.walls)
         return state, reward, done
 
-    def render(self, action):
+    def render(self, action, episode, global_steps, max_q, episode_steps):
         self.clock = pygame.time.Clock()
         self.screen.blit(self.back_image, self.back_rect)
 
@@ -415,36 +415,35 @@ class GameEnvironment:
                 else:
                     pygame.draw.line(self.screen, (255,255,255), (self.car.p2.x, self.car.p2.y), (pt.x, pt.y), 1)
 
-        #render controll
-        #pygame.draw.rect(self.screen,(255,255,255),(800, 100, 40, 40),2)
-        #pygame.draw.rect(self.screen,(255,255,255),(850, 100, 40, 40),2)
-        #pygame.draw.rect(self.screen,(255,255,255),(900, 100, 40, 40),2)
-        #pygame.draw.rect(self.screen,(255,255,255),(850, 50, 40, 40),2)
-        #
-        #if action == 4:
-        #    pygame.draw.rect(self.screen,(0,255,0),(850, 50, 40, 40)) 
-        #elif action == 6:
-        #    pygame.draw.rect(self.screen,(0,255,0),(850, 50, 40, 40))
-        #    pygame.draw.rect(self.screen,(0,255,0),(800, 100, 40, 40))
-        #elif action == 5:
-        #    pygame.draw.rect(self.screen,(0,255,0),(850, 50, 40, 40))
-        #    pygame.draw.rect(self.screen,(0,255,0),(900, 100, 40, 40))
-        #elif action == 1:
-        #    pygame.draw.rect(self.screen,(0,255,0),(850, 100, 40, 40)) 
-        #elif action == 8:
-        #    pygame.draw.rect(self.screen,(0,255,0),(850, 100, 40, 40))
-        #    pygame.draw.rect(self.screen,(0,255,0),(800, 100, 40, 40))
-        #elif action == 7:
-        #    pygame.draw.rect(self.screen,(0,255,0),(850, 100, 40, 40))
-        #    pygame.draw.rect(self.screen,(0,255,0),(900, 100, 40, 40))
-        #elif action == 2:
-        #    pygame.draw.rect(self.screen,(0,255,0),(800, 100, 40, 40))
-        #elif action == 3:
-        #    pygame.draw.rect(self.screen,(0,255,0),(900, 100, 40, 40))
 
-        # score
-        text_surface = self.font.render(f'Punkte {self.car.points}', True, pygame.Color('red'))
-        self.screen.blit(text_surface, dest=(0, 0))
+
+        WHITE = (255, 255, 255)
+        hud_font = pygame.font.SysFont("Courier New", 24)
+
+        # Positionen
+        label_x = 30
+        value_x = 190  # Feste X-Position für die Zahlen
+        start_y = 30
+        line_spacing = 30
+
+        # Daten vorbereiten
+        lines = [
+            ("Episode:",                f"{episode}"),
+            ("Länge:",                  f"{episode_steps}"),
+            ("Schritte:",               f"{global_steps}"),
+            ("Score:",                  f"{self.car.points}"),
+            ("Max Q:",                  f"{max_q:.2f}" if max_q is not None else "-"),
+        ]
+
+        # Anzeige untereinander
+        for i, (label, value) in enumerate(lines):
+            y = start_y + i * line_spacing
+            label_surface = hud_font.render(label, True, WHITE)
+            value_surface = hud_font.render(value, True, WHITE)
+            self.screen.blit(label_surface, (label_x, y))
+            self.screen.blit(value_surface, (value_x, y))
+
+
 
         self.clock.tick(FPS)
         pygame.display.update()

@@ -191,7 +191,7 @@ def main():
                 done = True
 
             if render_game:
-                game.render(action)
+                game.render(action, episode, global_steps, current_avg_max_q, episode_steps)
 
         scores.append(score)
         eps_history.append(agent.epsilon)
