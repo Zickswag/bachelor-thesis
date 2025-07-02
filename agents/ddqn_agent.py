@@ -1,11 +1,8 @@
 import numpy as np
 import tensorflow as tf
 
+# ReplayBuffer speichert Erfahrungen (state, action, reward, next_state, done) und liefert zufällige Samples für das Training (Experience Replay)
 class ReplayBuffer(object):
-    """
-    ReplayBuffer speichert Erfahrungen (state, action, reward, next_state, done)
-    und liefert zufällige Samples für das Training (Experience Replay).
-    """
     def __init__(self, max_size, input_shape, n_actions, discrete=False):
         self.mem_size = max_size
         self.mem_cntr = 0
@@ -17,11 +14,8 @@ class ReplayBuffer(object):
         self.reward_memory = np.zeros(self.mem_size)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.float32)
 
+    # Speichert einen Übergang in den Puffer. Ältere Übergänge werden im ring buffer Modus überschrieben.
     def store_transition(self, state, action, reward, state_, done):
-        """
-        Speichert einen Übergang in den Puffer.
-        Ältere Übergänge werden im ring buffer Modus überschrieben.
-        """
         index = self.mem_cntr % self.mem_size
         self.state_memory[index] = state
         self.new_state_memory[index] = state_
@@ -36,11 +30,8 @@ class ReplayBuffer(object):
         self.terminal_memory[index] = 0.0 if done else 1.0
         self.mem_cntr += 1
 
+    # Zieht eine Zufallsstichprobe aus dem Replay Buffer. Liefert Tupel (states, actions, rewards, next_states, dones).
     def sample_buffer(self, batch_size):
-        """
-        Zieht eine Zufallsstichprobe aus dem Replay Buffer.
-        Liefert Tupel (states, actions, rewards, next_states, dones).
-        """
         max_mem = min(self.mem_cntr, self.mem_size)
         batch = np.random.choice(max_mem, batch_size)
         states = self.state_memory[batch]
@@ -50,12 +41,8 @@ class ReplayBuffer(object):
         terminal = self.terminal_memory[batch]
         return states, actions, rewards, states_, terminal
 
-
+# Deep Q-Network Agent mit Target-Network, Epsilon-Greedy Exploration und Experience Replay
 class DDQNAgent(object):
-    """
-    Deep Q-Network Agent mit Target-Network, Epsilon-Greedy Exploration
-    und Experience Replay.
-    """
     def __init__(self, alpha, gamma, actions, epsilon, batch_size, input_dims, epsilon_decay_steps, epsilon_end, mem_size, replace_target_steps, layers, fname):
         self.action_space = [i for i in range(actions)]
         self.n_actions = actions
@@ -77,16 +64,12 @@ class DDQNAgent(object):
         self.learn_step_counter = 0 
         self.epsilon_decay_value = (self.epsilon - self.epsilon_min) / self.epsilon_decay_steps
 
+    # Speichere die Erfahrung im Replay Buffer
     def remember(self, state, action, reward, new_state, done):
-        """Speichere die Erfahrung im Replay Buffer"""
         self.memory.store_transition(state, action, reward, new_state, done)
 
+    # Wähle Aktion per Epsilon-Greedy
     def choose_action(self, state):
-        """
-        Wähle Aktion per Epsilon-Greedy:
-         - Zufall mit Wahrscheinlichkeit ε
-         - sonst: argmax_a Q_eval(state, a)
-        """
         state_tensor = tf.convert_to_tensor([state], dtype=tf.float32)
         if np.random.random() < self.epsilon:
             return np.random.choice(self.action_space)
@@ -94,11 +77,8 @@ class DDQNAgent(object):
         action = int(tf.argmax(q_values[0]))
         return action
 
+    # Ziehe Batch aus Replay Buffer, berechne Ziel-Q-Werte, und führe einen Trainingsschritt auf dem Eval-Netzwerk aus  
     def learn(self):
-        """
-        Ziehe Batch aus Replay Buffer, berechne Ziel-Q-Werte,
-        und führe einen Trainingsschritt auf dem Eval-Netzwerk aus.
-        """
         if self.memory.mem_cntr < self.batch_size:
             return
 
@@ -147,27 +127,24 @@ class DDQNAgent(object):
         avg_max_q_estimate = tf.reduce_mean(tf.reduce_max(q_pred, axis=1)).numpy()
         return avg_max_q_estimate
 
+    # Kopiere Gewichte vom Eval- ins Target-Netzwerk
     def update_network_parameters(self):
-        """Kopiere Gewichte vom Eval- ins Target-Netzwerk"""
         self.target_network.copy_weights(self.eval_network)
 
+    # Speichere das Eval-Modell auf Festplatte
     def save_model(self, episode: int):
-        """Speichere das Eval-Modell auf Festplatte"""
         path = self.model_file.format(episode=episode)
         self.eval_network.model.save(path)
         
+    # Lade Modell und gleiche Target-Netzwerk an
     def load_model(self):
-        """Lade Modell und gleiche Target-Netzwerk an"""
         self.eval_network.model = tf.keras.models.load_model(self.model_file)
         self.target_network.model = tf.keras.models.load_model(self.model_file)
         if self.epsilon == 0.0:
             self.update_network_parameters()
 
-
+# Keras-basiertes Feedforward-Netzwerk für Q-Funktionsapproximation
 class QNetwork:
-    """
-    Keras-basiertes Feedforward-Netzwerk für Q-Funktionsapproximation.
-    """
     def __init__(self, NbrStates, NbrActions, batch_size, lr, layers):
         self.NbrStates = NbrStates
         self.NbrActions = NbrActions
@@ -177,24 +154,24 @@ class QNetwork:
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
         self.loss_fn = tf.keras.losses.MeanSquaredError()
     
+    # Erzeuge Sequential-Modell mit gegebener Layer-Architektur
     def create_model(self):
-        """Erzeuge Sequential-Modell mit gegebener Layer-Architektur"""
         model_layers = []
         for units in self.layers:
             model_layers.append(tf.keras.layers.Dense(units, activation=tf.nn.relu))
         model_layers.append(tf.keras.layers.Dense(self.NbrActions))
         return tf.keras.Sequential(model_layers)
     
+    # Kopiere trainierbare Variablen von einer Quelle
     def copy_weights(self, TrainNet):
-        """Kopiere trainierbare Variablen von einer Quelle"""
         variables1 = self.model.trainable_variables
         variables2 = TrainNet.model.trainable_variables
         for v1, v2 in zip(variables1, variables2):
             v1.assign(v2.numpy())
-            
+    
+    # Graph-Trainings-Schritt via tf.function
     @tf.function
     def train_step(self, states, q_targets):
-        """Einzelner Gradientenschritt auf Basis MeanSquaredError"""
         with tf.GradientTape() as tape:
             q_pred = self.model(states, training=True)
             loss   = self.loss_fn(q_targets, q_pred)

@@ -17,10 +17,10 @@ CRASH_PENALTY       = -1
 # Fahrzeugparameter
 CAR_WIDTH           = 14
 CAR_HEIGHT          = 30
-THRESHOLD           = int(math.hypot(CAR_WIDTH, CAR_HEIGHT)/2)  # ≈16 px
+THRESHOLD           = int(math.hypot(CAR_WIDTH, CAR_HEIGHT)/2) 
 MAX_SPEED           = 15
 ACCELERATION_FACTOR = 1.05
-DRIFT_FACTOR        = 0.1  # (Je kleiner, desto mehr „rutscht“ das Auto.)    
+DRIFT_FACTOR        = 0.1    
 TURN_ANGLE_RAD      = math.radians(15)
 
 # Sensor (Ray-Casting)
@@ -31,57 +31,73 @@ DRAW_WALLS          = False
 DRAW_CHECKPOINTS    = False
 DRAW_RAYS           = False
 
-# Helper zum Normieren eines Winkelunterschieds auf [-π, +π]
+# Hilfsfunktion: Normalisiere Winkel auf [-π, π]
 def _normalize_angle(delta):
-    """Winkeldifferenz in [-π, π] bringen."""
     while delta > math.pi:
         delta -= 2*math.pi
     while delta < -math.pi:
         delta += 2*math.pi
     return delta
 
+# Prüft, ob ein Punkt nah genug an einem Checkpoint-Segment liegt
 def is_checkpoint_passed(px, py, x1, y1, x2, y2, thresh):
-    # Vektoren A→B und A→P
+    # Vektor von A → B (Checkpoint)
     AB = np.array([x2 - x1, y2 - y1], dtype=np.float32)
+    # Vektor von A → P (Position des Autos)
     AP = np.array([px - x1, py - y1], dtype=np.float32)
-    # Projektion von AP auf AB: t in ℝ
+
+    # Projektion: berechne Parameter t für die Position auf AB
     denom = np.dot(AB, AB)
     if denom == 0:
-        return False  # Segment der Länge 0
+        return False  # Ungültiges Segment
     t = np.dot(AP, AB) / denom
-    # Nur innerhalb des Segments [A,B] interessiert
+    
+    # Nur dann relevant, wenn Punkt auf dem Segment liegt (0 ≤ t ≤ 1)
     if t < 0.0 or t > 1.0:
         return False
-    # Nächster Punkt Q auf AB
+    
+    # Berechne nächsten Punkt Q auf AB
     Q = np.array([x1, y1], dtype=np.float32) + t * AB
-    # Quadratischer Abstand P↔Q
+
+    # Abstand zwischen Punkt P und Q quadrieren
     dist2 = (px - Q[0])**2 + (py - Q[1])**2
+
+    # Ist der Abstand kleiner als der Schwellwert?
     return dist2 <= thresh * thresh
 
+# Rotiert ein Rechteck
 def rotate_rect(cx, cy, width, height, angle):
     sa = math.sin(angle)
     ca = math.cos(angle)
     hx, hy = width/2, height/2
+
+    # Eckpunktverschiebungen entlang der Rotationsachsen
     dx2, dy2 = ca*hx, sa*hx
     dx1, dy1 = sa*hy, -ca*hy
+
+    # Rückgabe: vier Punkte
     p1 = (cx - dx2 + dx1, cy - dy2 + dy1)
     p2 = (cx + dx2 + dx1, cy + dy2 + dy1)
     p3 = (cx + dx2 - dx1, cy + dy2 - dy1)
     p4 = (cx - dx2 - dx1, cy - dy2 - dy1)
     return p1, p2, p3, p4
 
+# Hilfsklasse: Punkt (2D-Koordinaten)
 class Point:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        
+
+# Hilfsklasse: Gerade zwischen zwei Punkten (als Liniensegment) 
 class Line:
     def __init__(self, pt1, pt2):
         self.pt1 = Point(pt1.x, pt1.y)
         self.pt2 = Point(pt2.x, pt2.y)
 
+# Klasse für einen Ray (Sensorstrahl)
 class Ray:
-    __slots__ = ("x", "y", "dx", "dy")
+    __slots__ = ("x", "y", "dx", "dy") # Speicheroptimierung
+
     def __init__(self,x,y,angle):
         self.x = x
         self.y = y
@@ -89,21 +105,24 @@ class Ray:
         self.dy = -math.cos(angle) * SENSOR_RANGE
 
     def cast(self, wall):
+        # Wand-Endpunkte
         x1, y1, x2, y2 = wall.x1, wall.y1, wall.x2, wall.y2
+        # Ray-Endpunkte
         x3, y3 = self.x, self.y
         x4, y4 = x3 + self.dx, y3 + self.dy
 
         den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
             
         if(den == 0):
-            return None
+            return None # Parallele Linien, kein Schnitt
         
+        # Parameter t und u für den Schnittpunkt
         t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den
         u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den
 
+        # Schnittpunkt muss innerhalb der Segmente liegen
         if 0 < t < 1 and 0 < u < 1:
-            return Point(math.floor(x1 + t * (x2 - x1)),
-                           math.floor(y1 + t * (y2 - y1)))
+            return Point(math.floor(x1 + t * (x2 - x1)),math.floor(y1 + t * (y2 - y1)))
         return None
 
 class Car:
@@ -142,7 +161,7 @@ class Car:
             (self.p4.x, self.p4.y, self.p1.x, self.p1.y),
         ]
         
-
+    # Aktionsauswahl
     def action(self, choice):
         if choice == 1:
             self.accelerate(self.dvel)
@@ -153,6 +172,7 @@ class Car:
         elif choice == 4:
             self.accelerate(-self.dvel)
     
+    # Beschleunigung
     def accelerate(self,dvel):
         dvel = dvel * ACCELERATION_FACTOR
         self.vel = self.vel + dvel
@@ -165,7 +185,7 @@ class Car:
         self.target_angle = self.target_angle + dir * TURN_ANGLE_RAD
     
     def update(self):
-        # 1) Sofortige Karosserie-Ausrichtung übernehmen
+        # 1) Sofortige Ausrichtung übernehmen
         self.angle = self.target_angle
 
         # 2) Fahrtrichtung (travel_angle) schwenkt nur teilweise zur neuen Ausrichtung
@@ -184,7 +204,7 @@ class Car:
         self.x += self.velX
         self.y += self.velY
 
-        # 5) Eckpunkte verschieben (wie bisher)
+        # 5) Eckpunkte verschieben
         for pt in (self.pt1, self.pt2, self.pt3, self.pt4):
             pt.x += self.velX
             pt.y += self.velY
@@ -204,7 +224,7 @@ class Car:
         self.image = pygame.transform.rotate(self.original_image, 90 - math.degrees(self.target_angle))
         self.rect = self.image.get_rect(center=(self.x, self.y))
 
-        # 8) Collision-Linien updaten (wie bisher)
+        # 8) Collision-Linien updaten
         self.collision_lines = [
             (self.p1.x, self.p1.y, self.p2.x, self.p2.y),
             (self.p2.x, self.p2.y, self.p3.x, self.p3.y),
@@ -241,17 +261,17 @@ class Car:
 
             for wall in walls:
                 if dir_x >= 0:
-                    if wall.xmax < self.x:  # komplett links
+                    if wall.xmax < self.x:  
                         continue
                 else:
-                    if wall.xmin > self.x:  # komplett rechts
+                    if wall.xmin > self.x:  
                         continue
 
                 if dir_y >= 0:
-                    if wall.ymax < self.y:  # komplett oberhalb
+                    if wall.ymax < self.y:  
                         continue
                 else:
-                    if wall.ymin > self.y:  # komplett unterhalb
+                    if wall.ymin > self.y: 
                         continue
 
                 pt = ray.cast(wall)
@@ -442,8 +462,6 @@ class GameEnvironment:
             value_surface = hud_font.render(value, True, WHITE)
             self.screen.blit(label_surface, (label_x, y))
             self.screen.blit(value_surface, (value_x, y))
-
-
 
         self.clock.tick(FPS)
         pygame.display.update()

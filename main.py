@@ -1,10 +1,11 @@
 import argparse
 import os
 
+# Hole Seed aus Umgebungsvariable oder setze auf 0, falls nicht definiert (für Reproduzierbarkeit)
 seed = int(os.environ.get('PYTHONHASHSEED', '0'))
 
-# 1) Parse alle Argumente (inkl. seed) direkt am Anfang
-parser = argparse.ArgumentParser(description="Train DQN/DDQN on top-down race")
+# Argumente definieren (Hyperparameter etc.)
+parser = argparse.ArgumentParser(description="DQN vs DDQN Training")
 parser.add_argument("--agent",                  choices=["dqn","ddqn"], default="dqn")
 parser.add_argument("--layers",                 nargs="+",              type=int, default=[18,18,18])
 parser.add_argument("--lr",                     type=float,             default=0.0001)
@@ -21,6 +22,7 @@ parser.add_argument("--render_freq",            type=int,               default=
 parser.add_argument("--max_steps",              type=int,               default=50000000)
 args = parser.parse_args()
 
+# Imports
 import datetime, shutil, json, csv
 import pygame
 import random
@@ -31,15 +33,10 @@ from agents.dqn_agent import DQNAgent
 from agents.ddqn_agent import DDQNAgent
 from game import game_environment
 
-# Seed setzen
+# Alle Zufallsquellen deterministisch stellen
 random.seed(seed)           
 np.random.seed(seed)        
 tf.random.set_seed(seed) 
-
-# Strikten TF-Determinismus aktivieren (TF ≥2.8)
-#tf.config.experimental.enable_op_determinism()
-tf.config.threading.set_inter_op_parallelism_threads(14)
-tf.config.threading.set_intra_op_parallelism_threads(14)
 
 # Konstanten
 ACTIONS                 = 5
@@ -49,31 +46,28 @@ MAX_EPISODE_STEPS       = 1000
 EXPERIMENTS_DIR         = "experiments"
 CODE_SNAPSHOT_IGNORE    = ["experiments", "*.pyc", "__pycache__", ".git"]
 
-
+# Erstelle Ordnerstruktur für Experiment
 def setup_run_dir(args):
-     # Basisverzeichnis für alle Runs
     base = os.path.join(EXPERIMENTS_DIR, args.agent)
     ts = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S_%f")
     run_dir = os.path.join(base, ts)
     os.makedirs(run_dir, exist_ok=True)
     return run_dir
 
-
+# Speichere aktuellen Code als Snapshot (außer CODE_SNAPSHOT_IGNORE)
 def snapshot_code(dst):
     shutil.copytree(".", dst, ignore=shutil.ignore_patterns(*CODE_SNAPSHOT_IGNORE))
 
-
+# Initialisierung und Training
 def main():
-    # Run-Ordner anlegen
     run_dir = setup_run_dir(args)
 
-    # Config speichern als JSON
+    # Konfiguration speichern als JSON
     with open(os.path.join(run_dir, "config.json"), "w") as f:
         config = vars(args).copy()
         config['seed'] = seed
         json.dump(config, f, indent=2)
 
-    # Code-Snapshot
     snapshot_code(os.path.join(run_dir, "code_snapshot"))
 
     # TensorBoard
@@ -119,7 +113,7 @@ def main():
     global_steps = 0
     episode = 0
 
-    # Training
+    # Trainingsloop
     while global_steps < args.max_steps:
         game.reset()
         episode += 1
@@ -136,63 +130,54 @@ def main():
                     pygame.quit()
                     return
 
-            # Agent wählt Aktion basierend auf aktuellem Zustand
-            if global_steps < args.exploration_steps:
-                action = random.choice(agent.action_space) 
-            else:
-                action = agent.choose_action(state)
+            # Exploration oder Policy-Aktion
+            action = random.choice(agent.action_space) if global_steps < args.exploration_steps else agent.choose_action(state)
 
             next_state, reward, done = game.step(action)
 
-            # obs_ kann None sein, wenn das Spiel vorbei ist
+            # Fehlerbehandlung bei next_state
             if next_state is None:
-                if done:
-                    next_state = np.zeros(INPUT_DIMS, dtype=np.float32)  # Platzhalter-Array
-                    obs_valid = True
-                else:
-                    # Unerwarteter None-Wert → ungültig
-                    obs_valid = False
+                next_state = np.zeros(INPUT_DIMS, dtype=np.float32) if done else None
+                valid_transition = done
             else:
                 next_state = np.array(next_state, dtype=np.float32)
                 # Datentyp überprüpfung und Formvalidierung
-                obs_valid = (
+                valid_transition = (
                     isinstance(state, np.ndarray) and isinstance(next_state, np.ndarray)
                     and state.dtype == np.float32 and next_state.dtype == np.float32
                     and state.shape == (INPUT_DIMS,) and next_state.shape == (INPUT_DIMS,)
                     and not np.isnan(state).any() and not np.isnan(next_state).any()
                 )
 
-            # Timeout, wenn kein Reward
-            if reward == 0:
-                checkpoint_steps += 1
-                if checkpoint_steps > MAX_CHECKPOINT_STEPS:
-                    done = True
-            else:
-                checkpoint_steps = 0
+            # Beenden bei Inaktivität (kein Checkpoint erreicht)
+            checkpoint_steps = 0 if reward != 0 else checkpoint_steps + 1
+            if checkpoint_steps > MAX_CHECKPOINT_STEPS:
+                done = True
 
             score += reward
 
-            # Nur wenn obs_valid True ist, speichern und lernen
-            if obs_valid:
+            # Speichern & Lernen nur bei gültiger Beobachtung
+            if valid_transition:
                 # fülle Replay-Buffer mit gültiger Transition
                 agent.remember(state, action, reward, next_state, int(done))
-
                 if global_steps >= args.exploration_steps:
                     current_avg_max_q = agent.learn()
                 else: # Während der initialen Exploration nicht lernen
                     current_avg_max_q = None
-                # Aktualisiere aktuellen Zustand
                 state = next_state
 
             episode_steps += 1
             global_steps += 1
 
+            # Beenden nach maximalen Schritten pro Episode
             if episode_steps > MAX_EPISODE_STEPS:
                 done = True
 
+            # Rendern des Spiels
             if render_game:
                 game.render(action, episode, global_steps, current_avg_max_q, episode_steps)
 
+        # Nach der Episode
         scores.append(score)
         eps_history.append(agent.epsilon)
         avg_score = np.mean(scores[-100:])
